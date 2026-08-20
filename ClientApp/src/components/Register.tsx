@@ -83,7 +83,7 @@ export default function Register() {
             >
               <MenuItem value="Candidate">Candidate</MenuItem>
               <MenuItem value="Recruiter">Recruiter</MenuItem>
-              <MenuItem value="SchoolAdministrator">School Administrator</MenuItem>
+              <MenuItem value="InstituteAdministrator">Institute Administrator</MenuItem>
             </Select>
           </FormControl>
           <Button

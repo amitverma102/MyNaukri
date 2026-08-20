@@ -203,7 +203,7 @@ public class CandidatesController : ControllerBase
     }
 
     [HttpGet("{id}/resume/download")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult> DownloadResume(Guid id)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -224,14 +224,14 @@ public class CandidatesController : ControllerBase
             return StatusCode(402, new { code = "INSUFFICIENT_CREDITS", message = "Insufficient credits.", requiredCredits, availableCredits = balance, shortfall = requiredCredits - balance });
         }
 
-        var deductionSuccess = await _creditService.DeductCreditsAsync(recruiter.Id, requiredCredits, Domain.Enums.TransactionType.ResumeDownload, candidate.Id.ToString(), $"Downloaded resume for candidate {candidate.Id}", userId);
+        var deductionSuccess = await _creditService.DeductCreditsAsync(recruiter.Id, requiredCredits, Domain.Enums.TransactionType.RecruiterResumeDownload, candidate.Id.ToString(), $"Downloaded resume for candidate {candidate.User.FirstName}", userId);
         if (!deductionSuccess) return StatusCode(402, "Failed to deduct credits.");
 
         return Ok(new { ResumeUrl = candidate.ResumeUrl, CreditsDeducted = requiredCredits, RemainingBalance = balance - requiredCredits });
     }
 
     [HttpPost("{id}/contact/unlock")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult> UnlockContact(Guid id)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -259,7 +259,7 @@ public class CandidatesController : ControllerBase
             return StatusCode(402, new { code = "INSUFFICIENT_CREDITS", message = "Insufficient credits.", requiredCredits, availableCredits = balance, shortfall = requiredCredits - balance });
         }
 
-        var deductionSuccess = await _creditService.DeductCreditsAsync(recruiter.Id, requiredCredits, Domain.Enums.TransactionType.ContactView, candidate.Id.ToString(), $"Viewed contact for candidate {candidate.Id}", userId);
+        var deductionSuccess = await _creditService.DeductCreditsAsync(recruiter.Id, requiredCredits, Domain.Enums.TransactionType.RecruiterContactView, candidate.Id.ToString(), $"Viewed contact for candidate {candidate.User.FirstName}", userId);
         if (!deductionSuccess) return StatusCode(402, "Failed to deduct credits.");
 
         _context.CandidateContactAccesses.Add(new MyNaukri.Domain.Entities.CandidateContactAccess
@@ -274,7 +274,7 @@ public class CandidatesController : ControllerBase
     }
 
     [HttpPost("bulk-download")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult> BulkDownload([FromBody] List<Guid> candidateIds)
     {
         if (candidateIds == null || !candidateIds.Any()) return BadRequest("No candidates specified.");
@@ -295,7 +295,7 @@ public class CandidatesController : ControllerBase
             return StatusCode(402, new { code = "INSUFFICIENT_CREDITS", message = "Insufficient credits.", requiredCredits, availableCredits = balance, shortfall = requiredCredits - balance });
         }
 
-        var deductionSuccess = await _creditService.DeductCreditsAsync(recruiter.Id, requiredCredits, Domain.Enums.TransactionType.BulkProfileDownload, null, $"Bulk downloaded {candidateIds.Count} profiles", userId);
+        var deductionSuccess = await _creditService.DeductCreditsAsync(recruiter.Id, requiredCredits, Domain.Enums.TransactionType.RecruiterBulkDownload, null, $"Bulk downloaded {candidateIds.Count} profiles", userId);
         if (!deductionSuccess) return StatusCode(402, "Failed to deduct credits.");
 
         var candidates = await _context.Candidates.Where(c => candidateIds.Contains(c.Id)).Select(c => new { c.Id, c.ResumeUrl }).ToListAsync();
@@ -303,7 +303,7 @@ public class CandidatesController : ControllerBase
     }
 
     [HttpPost("{id}/email")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult> EmailCandidate(Guid id, [FromBody] string message)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -324,7 +324,7 @@ public class CandidatesController : ControllerBase
             return StatusCode(402, new { code = "INSUFFICIENT_CREDITS", message = "Insufficient credits.", requiredCredits, availableCredits = balance, shortfall = requiredCredits - balance });
         }
 
-        var deductionSuccess = await _creditService.DeductCreditsAsync(recruiter.Id, requiredCredits, Domain.Enums.TransactionType.CandidateEmail, candidate.Id.ToString(), $"Emailed candidate {candidate.Id}", userId);
+        var deductionSuccess = await _creditService.DeductCreditsAsync(recruiter.Id, requiredCredits, Domain.Enums.TransactionType.RecruiterCandidateEmail, candidate.Id.ToString(), $"Emailed candidate {candidate.Id}", userId);
         if (!deductionSuccess) return StatusCode(402, "Failed to deduct credits.");
 
         // Simulate sending email (would normally use an IEmailService)
@@ -334,7 +334,7 @@ public class CandidatesController : ControllerBase
     }
 
     [HttpGet("search")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult<IEnumerable<CandidateSearchResultDto>>> SearchCandidates([FromQuery] CandidateSearchRequestDto request)
     {
         var candidates = await _searchService.SearchCandidatesAsync(request);

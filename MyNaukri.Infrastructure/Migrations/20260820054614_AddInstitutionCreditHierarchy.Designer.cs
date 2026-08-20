@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyNaukri.Infrastructure.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MyNaukri.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260820054614_AddInstitutionCreditHierarchy")]
+    partial class AddInstitutionCreditHierarchy
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -296,33 +299,6 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.HasIndex("RecruiterId");
 
                     b.ToTable("CreditTransactions");
-                });
-
-            modelBuilder.Entity("MyNaukri.Domain.Entities.InstituteAdminProfile", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("InstitutionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("InstitutionId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("InstituteAdminProfiles");
                 });
 
             modelBuilder.Entity("MyNaukri.Domain.Entities.Institution", b =>
@@ -680,6 +656,33 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.ToTable("SavedJobs");
                 });
 
+            modelBuilder.Entity("MyNaukri.Domain.Entities.SchoolAdminProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("InstitutionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstitutionId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("SchoolAdminProfiles");
+                });
+
             modelBuilder.Entity("MyNaukri.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -821,25 +824,6 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Navigation("Recruiter");
                 });
 
-            modelBuilder.Entity("MyNaukri.Domain.Entities.InstituteAdminProfile", b =>
-                {
-                    b.HasOne("MyNaukri.Domain.Entities.Institution", "Institution")
-                        .WithMany("InstituteAdmins")
-                        .HasForeignKey("InstitutionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MyNaukri.Domain.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Institution");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("MyNaukri.Domain.Entities.InstitutionCreditWallet", b =>
                 {
                     b.HasOne("MyNaukri.Domain.Entities.Institution", "Institution")
@@ -957,6 +941,25 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Navigation("Job");
                 });
 
+            modelBuilder.Entity("MyNaukri.Domain.Entities.SchoolAdminProfile", b =>
+                {
+                    b.HasOne("MyNaukri.Domain.Entities.Institution", "Institution")
+                        .WithMany("SchoolAdmins")
+                        .HasForeignKey("InstitutionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyNaukri.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Institution");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("MyNaukri.Domain.Entities.Candidate", b =>
                 {
                     b.Navigation("Applications");
@@ -970,11 +973,11 @@ namespace MyNaukri.Infrastructure.Migrations
 
                     b.Navigation("CreditWallet");
 
-                    b.Navigation("InstituteAdmins");
-
                     b.Navigation("Jobs");
 
                     b.Navigation("Recruiters");
+
+                    b.Navigation("SchoolAdmins");
                 });
 
             modelBuilder.Entity("MyNaukri.Domain.Entities.Job", b =>

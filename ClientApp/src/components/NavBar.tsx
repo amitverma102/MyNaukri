@@ -32,7 +32,7 @@ export default function NavBar() {
 
   const isCandidate = role === 'Candidate';
   const isRecruiter = role === 'Recruiter' || role === 'CompanyHR';
-  const isAdmin = role === 'SchoolAdministrator' || role === 'SuperAdministrator' || role === 'Admin';
+  const isAdmin = role === 'InstituteAdministrator' || role === 'SuperAdministrator' || role === 'Admin';
 
   return (
     <AppBar position="static" color="inherit" elevation={0} sx={{ borderBottom: '1px solid rgba(0, 0, 0, 0.12)', bgcolor: 'white', color: 'text.primary' }}>

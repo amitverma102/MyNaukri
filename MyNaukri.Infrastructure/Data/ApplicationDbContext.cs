@@ -17,10 +17,16 @@ public class ApplicationDbContext : DbContext
     public DbSet<SavedJob> SavedJobs => Set<SavedJob>();
     public DbSet<Institution> Institutions => Set<Institution>();
     
-    public DbSet<RecruiterCreditTransaction> RecruiterCreditTransactions => Set<RecruiterCreditTransaction>();
+    public DbSet<CreditTransaction> CreditTransactions => Set<CreditTransaction>();
     public DbSet<RecruiterCreditRate> RecruiterCreditRates => Set<RecruiterCreditRate>();
     public DbSet<CandidateContactAccess> CandidateContactAccesses => Set<CandidateContactAccess>();
     public DbSet<JobApplicationComment> JobApplicationComments => Set<JobApplicationComment>();
+    
+    // New Institution Hierarchy and Credit Entities
+    public DbSet<InstituteAdminProfile> InstituteAdminProfiles => Set<InstituteAdminProfile>();
+    public DbSet<InstitutionCreditWallet> InstitutionCreditWallets => Set<InstitutionCreditWallet>();
+    public DbSet<CreditPurchase> CreditPurchases => Set<CreditPurchase>();
+    public DbSet<CreditPriceConfiguration> CreditPriceConfigurations => Set<CreditPriceConfiguration>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -70,6 +76,46 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(r => r.InstitutionId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        modelBuilder.Entity<InstituteAdminProfile>()
+            .HasOne(p => p.Institution)
+            .WithMany(i => i.InstituteAdmins)
+            .HasForeignKey(p => p.InstitutionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<InstituteAdminProfile>()
+            .HasOne(s => s.User)
+            .WithMany()
+            .HasForeignKey(s => s.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<InstitutionCreditWallet>()
+            .HasOne(w => w.Institution)
+            .WithOne(i => i.CreditWallet)
+            .HasForeignKey<InstitutionCreditWallet>(w => w.InstitutionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<InstitutionCreditWallet>()
+            .Property(w => w.RowVersion)
+            .IsRowVersion();
+
+        modelBuilder.Entity<CreditPurchase>()
+            .HasOne(p => p.Institution)
+            .WithMany(i => i.CreditPurchases)
+            .HasForeignKey(p => p.InstitutionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<CreditPurchase>()
+            .Property(p => p.PaymentStatus)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Institution>()
+            .Property(i => i.Type)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Institution>()
+            .Property(i => i.Status)
+            .HasConversion<string>();
+
         modelBuilder.Entity<CandidateContactAccess>()
             .HasIndex(cca => new { cca.RecruiterId, cca.CandidateId })
             .IsUnique();
@@ -90,10 +136,16 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(cca => cca.RecruiterId)
             .OnDelete(DeleteBehavior.Restrict);
             
-        modelBuilder.Entity<RecruiterCreditTransaction>()
-            .HasOne(rct => rct.Recruiter)
+        modelBuilder.Entity<CreditTransaction>()
+            .HasOne(ct => ct.Institution)
+            .WithMany(i => i.CreditTransactions)
+            .HasForeignKey(ct => ct.InstitutionId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<CreditTransaction>()
+            .HasOne(ct => ct.Recruiter)
             .WithMany(r => r.CreditTransactions)
-            .HasForeignKey(rct => rct.RecruiterId)
+            .HasForeignKey(ct => ct.RecruiterId)
             .OnDelete(DeleteBehavior.Cascade);
             
         modelBuilder.Entity<Candidate>()
@@ -104,7 +156,7 @@ public class ApplicationDbContext : DbContext
             .Property(c => c.ExServicemanBranch)
             .HasConversion<string>();
             
-        modelBuilder.Entity<RecruiterCreditTransaction>()
+        modelBuilder.Entity<CreditTransaction>()
             .Property(t => t.TransactionType)
             .HasConversion<string>();
     }

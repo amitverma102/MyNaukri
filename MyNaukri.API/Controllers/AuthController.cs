@@ -43,6 +43,11 @@ public class AuthController : ControllerBase
             return BadRequest("Email already exists.");
         }
 
+        if (request.Role == Role.Recruiter)
+        {
+            return BadRequest("Public recruiter registration is disabled. Please contact your School Administrator.");
+        }
+
         var otp = GenerateOtp();
         var user = new User
         {
@@ -64,21 +69,6 @@ public class AuthController : ControllerBase
             var candidate = new Candidate { UserId = user.Id };
             _context.Candidates.Add(candidate);
             await _context.SaveChangesAsync();
-        }
-        else if (user.Role == Role.Recruiter)
-        {
-            var institution = await _context.Institutions.FirstOrDefaultAsync();
-            if (institution != null)
-            {
-                var recruiter = new Recruiter 
-                { 
-                    UserId = user.Id, 
-                    InstitutionId = institution.Id,
-                    Designation = "HR Executive"
-                };
-                _context.Recruiters.Add(recruiter);
-                await _context.SaveChangesAsync();
-            }
         }
 
         await _notificationService.SendEmailAsync(

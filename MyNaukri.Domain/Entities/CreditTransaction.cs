@@ -3,18 +3,24 @@ using MyNaukri.Domain.Enums;
 
 namespace MyNaukri.Domain.Entities;
 
-public class RecruiterCreditTransaction : BaseEntity
+public class CreditTransaction : BaseEntity
 {
-    public Guid RecruiterId { get; set; }
-    public Recruiter Recruiter { get; set; } = null!;
+    public Guid InstitutionId { get; set; }
+    public Institution Institution { get; set; } = null!;
+    
+    public Guid? RecruiterId { get; set; }
+    public Recruiter? Recruiter { get; set; }
     
     public TransactionType TransactionType { get; set; }
     public int Credits { get; set; }
+    
     public int BalanceBefore { get; set; }
     public int BalanceAfter { get; set; }
+    
+    public string? ReferenceType { get; set; }
     public string? ReferenceId { get; set; }
     public string? Description { get; set; }
     
-    // Optional reference to a User who did the manual adjustment
     public Guid? CreatedByUserId { get; set; }
+    public User? CreatedByUser { get; set; }
 }

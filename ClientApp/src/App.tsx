@@ -16,6 +16,8 @@ import RecruiterDashboard from './components/RecruiterDashboard';
 import RecruiterProfile from './components/RecruiterProfile';
 import AdminDashboard from './components/AdminDashboard';
 import AdminProfile from './components/AdminProfile';
+import EduTechDashboard from './components/EduTechDashboard';
+import InstituteAdminDashboard from './components/InstituteAdminDashboard';
 import NavBar from './components/NavBar';
 import Footer from './components/Footer';
 import AboutUs from './components/info/AboutUs';
@@ -60,6 +62,8 @@ function App() {
       {/* Admin Routes */}
       <Route path="/admin/dashboard" element={<AdminDashboard />} />
       <Route path="/admin/profile" element={<AdminProfile />} />
+      <Route path="/edutechadmin/dashboard" element={<EduTechDashboard />} />
+      <Route path="/instituteadmin/dashboard" element={<InstituteAdminDashboard />} />
       
       {/* Legacy/Common Routes */}
       <Route path="/jobs" element={<JobsList />} />

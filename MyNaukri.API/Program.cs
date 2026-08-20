@@ -25,6 +25,7 @@ builder.Services.AddScoped<IStorageService, LocalMockStorageService>();
 builder.Services.AddScoped<ISearchService, DbSearchService>();
 builder.Services.AddScoped<INotificationService, MockNotificationService>();
 builder.Services.AddScoped<ICreditService, CreditService>();
+builder.Services.AddScoped<IInstitutionCreditService, InstitutionCreditService>();
 
 // Configure Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

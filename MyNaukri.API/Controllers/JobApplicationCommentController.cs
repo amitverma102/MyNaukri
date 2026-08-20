@@ -20,7 +20,7 @@ public class JobApplicationCommentController : ControllerBase
     }
 
     [HttpGet("{id}/comments")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult<IEnumerable<JobApplicationCommentDto>>> GetComments(Guid id)
     {
         var application = await _context.JobApplications
@@ -58,7 +58,7 @@ public class JobApplicationCommentController : ControllerBase
     }
 
     [HttpPost("{id}/comments")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult<JobApplicationCommentDto>> AddComment(Guid id, [FromBody] CreateJobApplicationCommentDto dto)
     {
         var application = await _context.JobApplications
@@ -97,7 +97,7 @@ public class JobApplicationCommentController : ControllerBase
     }
 
     [HttpPut("/api/job-application-comments/{id}")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult> UpdateComment(Guid id, [FromBody] CreateJobApplicationCommentDto dto)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -117,7 +117,7 @@ public class JobApplicationCommentController : ControllerBase
     }
 
     [HttpDelete("/api/job-application-comments/{id}")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult> DeleteComment(Guid id)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);

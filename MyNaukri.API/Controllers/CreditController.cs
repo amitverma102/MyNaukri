@@ -10,7 +10,7 @@ namespace MyNaukri.API.Controllers;
 
 [ApiController]
 [Route("api/recruiter/credits")]
-[Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+[Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
 public class CreditController : ControllerBase
 {
     private readonly ICreditService _creditService;
@@ -58,7 +58,7 @@ public class CreditController : ControllerBase
         var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.UserId == userId);
         if (recruiter == null) return StatusCode(403, "User is not registered as a recruiter.");
 
-        var transactions = await _context.RecruiterCreditTransactions
+        var transactions = await _context.CreditTransactions
             .Where(t => t.RecruiterId == recruiter.Id)
             .OrderByDescending(t => t.CreatedAt)
             .Skip((page - 1) * pageSize)
@@ -66,7 +66,7 @@ public class CreditController : ControllerBase
             .Select(t => new CreditTransactionDto
             {
                 Id = t.Id,
-                RecruiterId = t.RecruiterId,
+                RecruiterId = t.RecruiterId.Value,
                 TransactionType = t.TransactionType.ToString(),
                 Credits = t.Credits,
                 BalanceBefore = t.BalanceBefore,

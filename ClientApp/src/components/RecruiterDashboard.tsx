@@ -131,9 +131,9 @@ export default function RecruiterDashboard() {
 
   const fetchCredits = async () => {
     try {
-      const balRes = await api.get('/credits/balance');
-      setCreditBalance(balRes.data.balance);
-      const histRes = await api.get('/credits/history');
+      const balRes = await api.get('/recruiter/credits');
+      setCreditBalance(balRes.data.availableCredits || balRes.data.balance || 0);
+      const histRes = await api.get('/recruiter/credits/transactions');
       setCreditHistory(histRes.data);
     } catch (err) {
       console.error('Failed to fetch credits', err);

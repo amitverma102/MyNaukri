@@ -5,6 +5,6 @@ public enum Role
     Candidate,
     Recruiter,
     CompanyHR,
-    SchoolAdministrator,
+    InstituteAdministrator,
     SuperAdministrator
 }

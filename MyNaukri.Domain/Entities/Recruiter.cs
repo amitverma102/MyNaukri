@@ -16,6 +16,6 @@ public class Recruiter : BaseEntity
     
     public int Credits { get; set; } = 0;
     public RecruiterCreditRate? CreditRate { get; set; }
-    public ICollection<RecruiterCreditTransaction> CreditTransactions { get; set; } = new List<RecruiterCreditTransaction>();
+    public ICollection<CreditTransaction> CreditTransactions { get; set; } = new List<CreditTransaction>();
     public ICollection<CandidateContactAccess> ContactAccesses { get; set; } = new List<CandidateContactAccess>();
 }

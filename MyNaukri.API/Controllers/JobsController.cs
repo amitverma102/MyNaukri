@@ -52,7 +52,7 @@ public class JobsController : ControllerBase
         return Ok(jobs);
     }
 
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     [HttpPost]
     public async Task<ActionResult<JobDto>> CreateJob(JobDto jobDto)
     {
@@ -84,7 +84,7 @@ public class JobsController : ControllerBase
             });
         }
 
-        var transactionType = jobDto.IsPlatinum ? Domain.Enums.TransactionType.PlatinumJobPosting : Domain.Enums.TransactionType.NormalJobPosting;
+        var transactionType = jobDto.IsPlatinum ? MyNaukri.Domain.Enums.TransactionType.RecruiterPlatinumJobPosting : MyNaukri.Domain.Enums.TransactionType.RecruiterNormalJobPosting;
         var deductionSuccess = await _creditService.DeductCreditsAsync(recruiter.Id, requiredCredits, transactionType, null, $"Posted {(jobDto.IsPlatinum ? "Platinum" : "Normal")} job", userId);
         
         if (!deductionSuccess)
@@ -144,7 +144,7 @@ public class JobsController : ControllerBase
     }
 
     [HttpGet("recruiter")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult<IEnumerable<JobDto>>> GetRecruiterJobs()
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -200,7 +200,7 @@ public class JobsController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult> UpdateJob(Guid id, JobDto jobDto)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -226,7 +226,7 @@ public class JobsController : ControllerBase
     }
 
     [HttpPatch("{id}/close")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult> CloseJob(Guid id)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);

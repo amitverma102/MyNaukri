@@ -56,7 +56,7 @@ public class AdminCreditController : ControllerBase
 
         if (credits > 0)
         {
-            await _creditService.AddCreditsAsync(id, credits, TransactionType.CreditIssued, null, "Admin issued credits", currentUserId);
+            await _creditService.AddCreditsAsync(id, credits, TransactionType.InstitutionAdminCredit, null, "Admin issued credits", currentUserId);
         }
         else if (credits < 0)
         {

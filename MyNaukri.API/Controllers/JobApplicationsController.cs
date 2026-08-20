@@ -124,7 +124,7 @@ public class JobApplicationsController : ControllerBase
     }
 
     [HttpGet("job/{jobId}")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult<IEnumerable<JobApplicationDto>>> GetApplicationsForJob(Guid jobId)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -160,7 +160,7 @@ public class JobApplicationsController : ControllerBase
     }
 
     [HttpGet("interviews")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult<IEnumerable<JobApplicationDto>>> GetInterviews()
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -199,7 +199,7 @@ public class JobApplicationsController : ControllerBase
     }
 
     [HttpPatch("{id}/status")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult> UpdateApplicationStatus(Guid id, [FromBody] UpdateStatusRequest request)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -226,7 +226,7 @@ public class JobApplicationsController : ControllerBase
     }
 
     [HttpPatch("{id}/schedule-interview")]
-    [Authorize(Roles = "Recruiter,CompanyHR,SchoolAdministrator,SuperAdministrator")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult> ScheduleInterview(Guid id, [FromBody] ScheduleInterviewRequest request)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);

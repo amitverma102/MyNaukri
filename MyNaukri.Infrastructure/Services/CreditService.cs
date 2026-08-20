@@ -79,19 +79,21 @@ public class CreditService : ICreditService
             recruiter.Credits -= credits;
             var balanceAfter = recruiter.Credits;
 
-            var creditTransaction = new RecruiterCreditTransaction
+            var creditTransaction = new CreditTransaction
             {
+                InstitutionId = recruiter.InstitutionId,
                 RecruiterId = recruiterId,
                 TransactionType = transactionType,
                 Credits = credits, // consumption amount
                 BalanceBefore = balanceBefore,
                 BalanceAfter = balanceAfter,
+                ReferenceType = "Recruiter",
                 ReferenceId = referenceId,
                 Description = description,
                 CreatedByUserId = currentUserId
             };
 
-            _context.RecruiterCreditTransactions.Add(creditTransaction);
+            _context.CreditTransactions.Add(creditTransaction);
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 
@@ -118,19 +120,21 @@ public class CreditService : ICreditService
             recruiter.Credits += credits;
             var balanceAfter = recruiter.Credits;
 
-            var creditTransaction = new RecruiterCreditTransaction
+            var creditTransaction = new CreditTransaction
             {
+                InstitutionId = recruiter.InstitutionId,
                 RecruiterId = recruiterId,
                 TransactionType = transactionType,
                 Credits = credits, 
                 BalanceBefore = balanceBefore,
                 BalanceAfter = balanceAfter,
+                ReferenceType = "Recruiter",
                 ReferenceId = referenceId,
                 Description = description,
                 CreatedByUserId = currentUserId
             };
 
-            _context.RecruiterCreditTransactions.Add(creditTransaction);
+            _context.CreditTransactions.Add(creditTransaction);
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 

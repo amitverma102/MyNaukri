@@ -2,13 +2,16 @@ namespace MyNaukri.Domain.Enums;
 
 public enum TransactionType
 {
-    CreditIssued = 1,
-    ResumeDownload = 2,
-    ContactView = 3,
-    BulkProfileDownload = 4,
-    NormalJobPosting = 5,
-    PlatinumJobPosting = 6,
-    CandidateEmail = 7,
-    CreditAdjustment = 8,
-    Refund = 9
+    InstitutionCreditPurchase = 1,
+    InstitutionAdminCredit = 2,
+    InstitutionToRecruiterAllocation = 3,
+    RecruiterToRecruiterTransfer = 4,
+    RecruiterResumeDownload = 5,
+    RecruiterContactView = 6,
+    RecruiterBulkDownload = 7,
+    RecruiterNormalJobPosting = 8,
+    RecruiterPlatinumJobPosting = 9,
+    RecruiterCandidateEmail = 10,
+    CreditRefund = 11,
+    CreditAdjustment = 12
 }
