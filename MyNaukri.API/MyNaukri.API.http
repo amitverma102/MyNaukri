@@ -1,0 +1,6 @@
+@MyNaukri.API_HostAddress = http://localhost:5206
+
+GET {{MyNaukri.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

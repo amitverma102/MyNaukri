@@ -1,0 +1,19 @@
+# .NET Core
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.dll
+*.exe
+
+# Node/React
+node_modules/
+dist/
+build/
+.env
+
+# OS Files
+.DS_Store
+Thumbs.db

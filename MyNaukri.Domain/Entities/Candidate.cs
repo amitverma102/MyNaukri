@@ -1,0 +1,36 @@
+using MyNaukri.Domain.Common;
+
+namespace MyNaukri.Domain.Entities;
+
+public class Candidate : BaseEntity
+{
+    public Guid UserId { get; set; }
+    public User User { get; set; } = null!;
+    
+    public string PhoneNumber { get; set; } = string.Empty; // Should be encrypted
+    public string ResumeUrl { get; set; } = string.Empty;
+    public string ProfilePictureUrl { get; set; } = string.Empty;
+    
+    // AI Extracted/Mapped properties
+    public string Skills { get; set; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
+    public int TotalExperienceYears { get; set; }
+
+    public decimal? CurrentSalary { get; set; }
+    public decimal? ExpectedSalary { get; set; }
+    public string NoticePeriod { get; set; } = string.Empty;
+    public string CurrentLocation { get; set; } = string.Empty;
+    public string PreferredLocations { get; set; } = string.Empty;
+    public string ClassesTaught { get; set; } = string.Empty;
+    public string BoardsTaught { get; set; } = string.Empty;
+    public string Education { get; set; } = string.Empty;
+    public string Certifications { get; set; } = string.Empty;
+    
+    // New fields
+    public Enums.Gender? Gender { get; set; }
+    public bool DifferentlyAbled { get; set; }
+    public bool ExServiceman { get; set; }
+    public Enums.ExServicemanBranch? ExServicemanBranch { get; set; }
+    
+    public ICollection<JobApplication> Applications { get; set; } = new List<JobApplication>();
+}

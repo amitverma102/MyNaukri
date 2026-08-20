@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="MyNaukri.API/MyNaukri.API.csproj" />
+  <Project Path="MyNaukri.Application/MyNaukri.Application.csproj" />
+  <Project Path="MyNaukri.Domain/MyNaukri.Domain.csproj" />
+  <Project Path="MyNaukri.Infrastructure/MyNaukri.Infrastructure.csproj" />
+  <Project Path="MyNaukri.SharedKernel/MyNaukri.SharedKernel.csproj" />
+</Solution>
