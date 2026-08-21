@@ -18,6 +18,10 @@ import AdminDashboard from './components/AdminDashboard';
 import AdminProfile from './components/AdminProfile';
 import EduTechDashboard from './components/EduTechDashboard';
 import InstituteAdminDashboard from './components/InstituteAdminDashboard';
+import RecruiterManagement from './components/instituteadmin/RecruiterManagement';
+import SuperAdminDashboard from './components/superadmin/SuperAdminDashboard';
+import InstitutionList from './components/superadmin/InstitutionList';
+import CreditTransactionTable from './components/superadmin/CreditTransactionTable';
 import NavBar from './components/NavBar';
 import Footer from './components/Footer';
 import AboutUs from './components/info/AboutUs';
@@ -64,6 +68,12 @@ function App() {
       <Route path="/admin/profile" element={<AdminProfile />} />
       <Route path="/edutechadmin/dashboard" element={<EduTechDashboard />} />
       <Route path="/instituteadmin/dashboard" element={<InstituteAdminDashboard />} />
+      <Route path="/instituteadmin/recruiters" element={<RecruiterManagement />} />
+      
+      {/* SuperAdmin Routes */}
+      <Route path="/superadmin/dashboard" element={<SuperAdminDashboard />} />
+      <Route path="/superadmin/institutions" element={<InstitutionList />} />
+      <Route path="/superadmin/credit-transactions" element={<CreditTransactionTable />} />
       
       {/* Legacy/Common Routes */}
       <Route path="/jobs" element={<JobsList />} />

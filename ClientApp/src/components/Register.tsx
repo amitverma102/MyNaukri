@@ -74,18 +74,7 @@ export default function Register() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Role</InputLabel>
-            <Select
-              value={role}
-              label="Role"
-              onChange={(e) => setRole(e.target.value)}
-            >
-              <MenuItem value="Candidate">Candidate</MenuItem>
-              <MenuItem value="Recruiter">Recruiter</MenuItem>
-              <MenuItem value="InstituteAdministrator">Institute Administrator</MenuItem>
-            </Select>
-          </FormControl>
+
           <Button
             type="submit"
             fullWidth

@@ -268,6 +268,19 @@ public class JobsController : ControllerBase
         {
             recruiter = new Recruiter { UserId = recruiterUser.Id, InstitutionId = institution.Id, Designation = "HR Manager" };
             _context.Recruiters.Add(recruiter);
+
+            var creditRate = new RecruiterCreditRate
+            {
+                Recruiter = recruiter,
+                ResumeDownloadRate = 5,
+                ContactViewRate = 2,
+                BulkProfileDownloadRate = 2,
+                NormalJobPostingRate = 20,
+                PlatinumJobPostingRate = 40,
+                CandidateEmailRate = 3
+            };
+            _context.RecruiterCreditRates.Add(creditRate);
+
             await _context.SaveChangesAsync();
         }
 

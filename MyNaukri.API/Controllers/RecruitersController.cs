@@ -88,6 +88,18 @@ public class RecruitersController : ControllerBase
             };
             if (institution != null) recruiter.InstitutionId = institution.Id;
             _context.Recruiters.Add(recruiter);
+
+            var creditRate = new RecruiterCreditRate
+            {
+                Recruiter = recruiter,
+                ResumeDownloadRate = 5,
+                ContactViewRate = 2,
+                BulkProfileDownloadRate = 2,
+                NormalJobPostingRate = 20,
+                PlatinumJobPostingRate = 40,
+                CandidateEmailRate = 3
+            };
+            _context.RecruiterCreditRates.Add(creditRate);
         }
         else
         {

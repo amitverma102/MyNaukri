@@ -22,6 +22,48 @@ namespace MyNaukri.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("MyNaukri.Domain.Entities.AuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Details")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("InstitutionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("PerformedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstitutionId");
+
+                    b.HasIndex("PerformedByUserId");
+
+                    b.ToTable("AuditLogs");
+                });
+
             modelBuilder.Entity("MyNaukri.Domain.Entities.Candidate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -127,6 +169,12 @@ namespace MyNaukri.Infrastructure.Migrations
 
                     b.Property<int>("CreditsCharged")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("HasDownloadedResume")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("HasUnlockedContact")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid>("RecruiterId")
                         .HasColumnType("uuid");
@@ -271,6 +319,9 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Property<Guid>("InstitutionId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Reason")
+                        .HasColumnType("text");
+
                     b.Property<Guid?>("RecruiterId")
                         .HasColumnType("uuid");
 
@@ -362,6 +413,9 @@ namespace MyNaukri.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("MaxRecruiters")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
@@ -412,12 +466,6 @@ namespace MyNaukri.Infrastructure.Migrations
 
                     b.Property<Guid>("InstitutionId")
                         .HasColumnType("uuid");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("bytea");
 
                     b.Property<int>("TotalAllocatedCredits")
                         .HasColumnType("integer");
@@ -590,12 +638,20 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Property<int>("Credits")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Department")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("Designation")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<Guid>("InstitutionId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Mobile")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -689,6 +745,9 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("CurrentSessionId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("text");
@@ -735,6 +794,24 @@ namespace MyNaukri.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("MyNaukri.Domain.Entities.AuditLog", b =>
+                {
+                    b.HasOne("MyNaukri.Domain.Entities.Institution", "Institution")
+                        .WithMany()
+                        .HasForeignKey("InstitutionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MyNaukri.Domain.Entities.User", "PerformedByUser")
+                        .WithMany()
+                        .HasForeignKey("PerformedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Institution");
+
+                    b.Navigation("PerformedByUser");
                 });
 
             modelBuilder.Entity("MyNaukri.Domain.Entities.Candidate", b =>

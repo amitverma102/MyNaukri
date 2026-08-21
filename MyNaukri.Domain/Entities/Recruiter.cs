@@ -8,6 +8,8 @@ public class Recruiter : BaseEntity
     public User User { get; set; } = null!;
     
     public string Designation { get; set; } = string.Empty;
+    public string Mobile { get; set; } = string.Empty;
+    public string Department { get; set; } = string.Empty;
     
     public Guid InstitutionId { get; set; }
     public Institution Institution { get; set; } = null!;

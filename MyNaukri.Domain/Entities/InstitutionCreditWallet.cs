@@ -12,7 +12,4 @@ public class InstitutionCreditWallet : BaseEntity
     public int TotalPurchasedCredits { get; set; } = 0;
     public int TotalAllocatedCredits { get; set; } = 0;
     public int TotalConsumedCredits { get; set; } = 0;
-    
-    [Timestamp]
-    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
 }

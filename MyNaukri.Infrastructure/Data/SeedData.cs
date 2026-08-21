@@ -8,6 +8,22 @@ public static class SeedData
 {
     public static async Task SeedJobsAsync(ApplicationDbContext context)
     {
+        var eduTechAdmin = await context.Users.FirstOrDefaultAsync(u => u.Email == "EduTechAdmin" || u.Email == "edutechadmin@mynaukri.com");
+        if (eduTechAdmin == null)
+        {
+            eduTechAdmin = new User
+            {
+                FirstName = "EduTech",
+                LastName = "Admin",
+                Email = "EduTechAdmin",
+                PasswordHash = BCrypt.Net.BCrypt.EnhancedHashPassword("Sch@123"),
+                Role = Role.SuperAdministrator,
+                IsEmailVerified = true
+            };
+            context.Users.Add(eduTechAdmin);
+            await context.SaveChangesAsync();
+        }
+
         // Check if jobs are already seeded
         if (await context.Jobs.CountAsync() >= 100) return;
 

@@ -135,8 +135,9 @@ public class InstitutionCreditService : IInstitutionCreditService
                 Credits = -credits,
                 BalanceBefore = instBalanceBefore,
                 BalanceAfter = wallet.AvailableCredits,
-                RecruiterId = recruiterId,
+                RecruiterId = null,
                 ReferenceType = "Allocation",
+                ReferenceId = recruiterId.ToString(),
                 CreatedByUserId = allocatedByUserId,
                 Description = reason ?? "Allocated to recruiter"
             };
@@ -152,6 +153,75 @@ public class InstitutionCreditService : IInstitutionCreditService
                 ReferenceType = "Allocation",
                 CreatedByUserId = allocatedByUserId,
                 Description = reason ?? "Received from institution"
+            };
+
+            _context.CreditTransactions.Add(instTransaction);
+            _context.CreditTransactions.Add(recTransaction);
+
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+            
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync();
+            return false;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<bool> RevokeFromRecruiterAsync(Guid institutionId, Guid recruiterId, int credits, Guid revokedByUserId, string? reason)
+    {
+        if (credits <= 0) throw new ArgumentException("Credits must be positive.", nameof(credits));
+
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            var wallet = await _context.InstitutionCreditWallets.FirstOrDefaultAsync(w => w.InstitutionId == institutionId);
+            if (wallet == null) return false;
+
+            var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.Id == recruiterId && r.InstitutionId == institutionId);
+            if (recruiter == null || recruiter.Credits < credits) return false;
+
+            // Institution Add
+            var instBalanceBefore = wallet.AvailableCredits;
+            wallet.AvailableCredits += credits;
+
+            // Recruiter Deduct
+            var recBalanceBefore = recruiter.Credits;
+            recruiter.Credits -= credits;
+
+            // Transactions
+            var instTransaction = new CreditTransaction
+            {
+                InstitutionId = institutionId,
+                TransactionType = TransactionType.CreditRefund,
+                Credits = credits,
+                BalanceBefore = instBalanceBefore,
+                BalanceAfter = wallet.AvailableCredits,
+                RecruiterId = null,
+                ReferenceType = "Revoke",
+                ReferenceId = recruiterId.ToString(),
+                CreatedByUserId = revokedByUserId,
+                Description = reason ?? "Revoked from recruiter"
+            };
+            
+            var recTransaction = new CreditTransaction
+            {
+                InstitutionId = institutionId,
+                RecruiterId = recruiterId,
+                TransactionType = TransactionType.CreditRefund,
+                Credits = -credits,
+                BalanceBefore = recBalanceBefore,
+                BalanceAfter = recruiter.Credits,
+                ReferenceType = "Revoke",
+                CreatedByUserId = revokedByUserId,
+                Description = reason ?? "Revoked by institution"
             };
 
             _context.CreditTransactions.Add(instTransaction);
@@ -285,6 +355,73 @@ public class InstitutionCreditService : IInstitutionCreditService
         {
             await transaction.RollbackAsync();
             return false;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<CreditTransaction?> SuperAdminAddCreditsAsync(Guid institutionId, int credits, Guid addedByUserId, string reason)
+    {
+        if (credits <= 0) throw new ArgumentException("Credits must be positive.", nameof(credits));
+
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            var wallet = await _context.InstitutionCreditWallets.FirstOrDefaultAsync(w => w.InstitutionId == institutionId);
+            if (wallet == null)
+            {
+                wallet = new InstitutionCreditWallet { InstitutionId = institutionId };
+                _context.InstitutionCreditWallets.Add(wallet);
+            }
+
+            var balanceBefore = wallet.AvailableCredits;
+            
+            wallet.AvailableCredits += credits;
+            
+            var creditTransaction = new CreditTransaction
+            {
+                InstitutionId = institutionId,
+                TransactionType = TransactionType.SuperAdminCreditAllocation,
+                Credits = credits,
+                BalanceBefore = balanceBefore,
+                BalanceAfter = wallet.AvailableCredits,
+                ReferenceType = "SuperAdminIssue",
+                CreatedByUserId = addedByUserId,
+                Reason = reason,
+                Description = reason
+            };
+            
+            _context.CreditTransactions.Add(creditTransaction);
+
+            var auditLog = new AuditLog
+            {
+                Action = "ADD_INSTITUTION_CREDITS",
+                PerformedByUserId = addedByUserId,
+                Role = Role.SuperAdministrator,
+                InstitutionId = institutionId,
+                Details = System.Text.Json.JsonSerializer.Serialize(new 
+                {
+                    credits,
+                    balanceBefore,
+                    balanceAfter = wallet.AvailableCredits,
+                    reason
+                })
+            };
+
+            _context.AuditLogs.Add(auditLog);
+            
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+            
+            return creditTransaction;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync();
+            return null;
         }
         catch
         {

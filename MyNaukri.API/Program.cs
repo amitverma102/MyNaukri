@@ -42,6 +42,33 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(builder.Configuration["JwtOptions:SecretKey"]!))
         };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var dbContext = context.HttpContext.RequestServices.GetRequiredService<MyNaukri.Infrastructure.Data.ApplicationDbContext>();
+                
+                var userIdClaim = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var roleClaim = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+                var sessionIdClaim = context.Principal?.FindFirst("SessionId")?.Value;
+
+                if (userIdClaim != null && (roleClaim == "Recruiter" || roleClaim == "InstituteAdministrator"))
+                {
+                    if (Guid.TryParse(userIdClaim, out var userId))
+                    {
+                        var user = await dbContext.Users.FindAsync(userId);
+                        if (user != null)
+                        {
+                            if (user.CurrentSessionId?.ToString() != sessionIdClaim)
+                            {
+                                context.Fail("Session invalidated due to new login.");
+                            }
+                        }
+                    }
+                }
+            }
+        };
     });
 
 builder.Services.AddCors(options =>

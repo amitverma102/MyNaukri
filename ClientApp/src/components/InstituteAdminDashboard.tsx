@@ -1,17 +1,16 @@
-import { Typography, Container, Paper, Grid, Card, CardContent, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Box } from '@mui/material';
+import { Typography, Container, Grid, Card, CardContent, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Box } from '@mui/material';
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 
 export default function InstituteAdminDashboard() {
   const [wallet, setWallet] = useState<any>(null);
-  const [recruiters, setRecruiters] = useState<any[]>([]);
+  const [recruiterSummary, setRecruiterSummary] = useState<any>(null);
   
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [purchaseAmount, setPurchaseAmount] = useState<number>(0);
 
-  const [isAllocateModalOpen, setIsAllocateModalOpen] = useState(false);
-  const [selectedRecruiter, setSelectedRecruiter] = useState<any>(null);
-  const [allocateAmount, setAllocateAmount] = useState<number>(0);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchData();
@@ -19,12 +18,12 @@ export default function InstituteAdminDashboard() {
 
   const fetchData = async () => {
     try {
-      const [walletRes, recruitersRes] = await Promise.all([
+      const [walletRes, summaryRes] = await Promise.all([
         api.get('/instituteadmin/wallet'),
-        api.get('/instituteadmin/recruiters')
+        api.get('/instituteadmin/recruiters/summary')
       ]);
       setWallet(walletRes.data);
-      setRecruiters(recruitersRes.data);
+      setRecruiterSummary(summaryRes.data);
     } catch (err) {
       console.error('Failed to fetch data', err);
     }
@@ -42,20 +41,7 @@ export default function InstituteAdminDashboard() {
     }
   };
 
-  const handleAllocate = async () => {
-    if (!selectedRecruiter || allocateAmount <= 0) return;
-    try {
-      await api.post(`/instituteadmin/recruiters/${selectedRecruiter.id}/allocate`, {
-        credits: allocateAmount,
-        reason: 'Allocated by Institute Admin'
-      });
-      setIsAllocateModalOpen(false);
-      fetchData();
-      alert('Credits allocated successfully!');
-    } catch (err: any) {
-      alert(err.response?.data?.message || err.response?.data || 'Failed to allocate credits.');
-    }
-  };
+  const isLimitReached = recruiterSummary && !recruiterSummary.canCreateRecruiter;
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
@@ -80,53 +66,40 @@ export default function InstituteAdminDashboard() {
             </CardContent>
           </Card>
         </Grid>
-      </Grid>
-      
-      <Paper sx={{ p: 4, mt: 4, borderRadius: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h5" sx={{ fontWeight: 'bold' }}>Manage Recruiters</Typography>
-          <Button variant="outlined">Add Recruiter</Button>
-        </Box>
-        <TableContainer sx={{ border: '1px solid #e0e0e0', borderRadius: 2 }}>
-          <Table>
-            <TableHead sx={{ bgcolor: '#f5f5f5' }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 'bold' }}>Name</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Email</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Current Credits</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {recruiters.map((r) => (
-                <TableRow key={r.id} hover>
-                  <TableCell>{r.firstName} {r.lastName}</TableCell>
-                  <TableCell>{r.email}</TableCell>
-                  <TableCell>
-                    <Typography sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                      {r.credits}
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>Recruiter Summary</Typography>
+              {recruiterSummary ? (
+                <Box>
+                  <Typography variant="body1">
+                    Active Recruiters: <strong>{recruiterSummary.currentRecruiters} / {recruiterSummary.maxRecruiters}</strong>
+                  </Typography>
+                  <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
+                    Available Slots: <strong>{recruiterSummary.availableSlots}</strong>
+                  </Typography>
+                  
+                  {isLimitReached && (
+                    <Typography color="error" variant="body2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                      ⚠ Maximum recruiter limit reached.
                     </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Button 
-                      variant="contained" 
-                      size="small" 
-                      onClick={() => { setSelectedRecruiter(r); setAllocateAmount(0); setIsAllocateModalOpen(true); }}
-                    >
-                      Allocate Credits
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {recruiters.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} align="center" sx={{ py: 4, color: 'text.secondary' }}>No recruiters found.</TableCell>
-                </TableRow>
+                  )}
+
+                  <Button 
+                    variant="outlined" 
+                    color="primary"
+                    onClick={() => navigate('/instituteadmin/recruiters')}
+                  >
+                    Manage Recruiters
+                  </Button>
+                </Box>
+              ) : (
+                <Typography>Loading summary...</Typography>
               )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
 
       {/* Purchase Modal */}
       <Dialog open={isPurchaseModalOpen} onClose={() => setIsPurchaseModalOpen(false)} maxWidth="sm" fullWidth>
@@ -146,32 +119,6 @@ export default function InstituteAdminDashboard() {
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setIsPurchaseModalOpen(false)}>Cancel</Button>
           <Button onClick={handlePurchase} variant="contained" color="primary">Confirm Purchase</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Allocate Modal */}
-      <Dialog open={isAllocateModalOpen} onClose={() => setIsAllocateModalOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Allocate Credits to {selectedRecruiter?.firstName}</DialogTitle>
-        <DialogContent dividers>
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" color="textSecondary">
-              Institution Balance: <strong>{wallet?.availableCredits ?? 0}</strong>
-            </Typography>
-          </Box>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Credits to Allocate"
-            type="number"
-            fullWidth
-            variant="outlined"
-            value={allocateAmount}
-            onChange={(e) => setAllocateAmount(Number(e.target.value))}
-          />
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setIsAllocateModalOpen(false)}>Cancel</Button>
-          <Button onClick={handleAllocate} variant="contained" color="primary">Allocate</Button>
         </DialogActions>
       </Dialog>
     </Container>

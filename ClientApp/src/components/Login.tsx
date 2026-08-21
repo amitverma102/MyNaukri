@@ -31,7 +31,11 @@ export default function Login() {
       
       if (role === 'Recruiter' || role === 'CompanyHR') {
         navigate('/recruiter/dashboard');
-      } else if (role === 'InstituteAdministrator' || role === 'SuperAdministrator' || role === 'Admin') {
+      } else if (role === 'SuperAdministrator') {
+        navigate('/superadmin/dashboard');
+      } else if (role === 'InstituteAdministrator') {
+        navigate('/instituteadmin/dashboard');
+      } else if (role === 'Admin') {
         navigate('/admin/dashboard');
       } else {
         navigate('/candidate/dashboard');

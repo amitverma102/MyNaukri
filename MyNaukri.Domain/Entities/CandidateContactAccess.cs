@@ -11,4 +11,7 @@ public class CandidateContactAccess : BaseEntity
     public Candidate Candidate { get; set; } = null!;
     
     public int CreditsCharged { get; set; }
+    
+    public bool HasUnlockedContact { get; set; } = true;
+    public bool HasDownloadedResume { get; set; } = false;
 }

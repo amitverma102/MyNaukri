@@ -23,9 +23,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<JobApplicationComment> JobApplicationComments => Set<JobApplicationComment>();
     
     // New Institution Hierarchy and Credit Entities
-    public DbSet<InstituteAdminProfile> InstituteAdminProfiles => Set<InstituteAdminProfile>();
-    public DbSet<InstitutionCreditWallet> InstitutionCreditWallets => Set<InstitutionCreditWallet>();
-    public DbSet<CreditPurchase> CreditPurchases => Set<CreditPurchase>();
+    public DbSet<InstituteAdminProfile> InstituteAdminProfiles { get; set; } = null!;
+    public DbSet<InstitutionCreditWallet> InstitutionCreditWallets { get; set; } = null!;
+    public DbSet<CreditPurchase> CreditPurchases { get; set; } = null!;
+    public DbSet<AuditLog> AuditLogs { get; set; } = null!;
     public DbSet<CreditPriceConfiguration> CreditPriceConfigurations => Set<CreditPriceConfiguration>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -93,10 +94,8 @@ public class ApplicationDbContext : DbContext
             .WithOne(i => i.CreditWallet)
             .HasForeignKey<InstitutionCreditWallet>(w => w.InstitutionId)
             .OnDelete(DeleteBehavior.Cascade);
-
-        modelBuilder.Entity<InstitutionCreditWallet>()
-            .Property(w => w.RowVersion)
-            .IsRowVersion();
+            
+        // Removed RowVersion for InstitutionCreditWallet as we rely on explicit transactions
 
         modelBuilder.Entity<CreditPurchase>()
             .HasOne(p => p.Institution)
@@ -158,6 +157,22 @@ public class ApplicationDbContext : DbContext
             
         modelBuilder.Entity<CreditTransaction>()
             .Property(t => t.TransactionType)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<AuditLog>()
+            .HasOne(a => a.PerformedByUser)
+            .WithMany()
+            .HasForeignKey(a => a.PerformedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AuditLog>()
+            .HasOne(a => a.Institution)
+            .WithMany()
+            .HasForeignKey(a => a.InstitutionId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<AuditLog>()
+            .Property(a => a.Role)
             .HasConversion<string>();
     }
 }

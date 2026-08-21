@@ -20,6 +20,7 @@ public class CreditTransaction : BaseEntity
     public string? ReferenceType { get; set; }
     public string? ReferenceId { get; set; }
     public string? Description { get; set; }
+    public string? Reason { get; set; }
     
     public Guid? CreatedByUserId { get; set; }
     public User? CreatedByUser { get; set; }

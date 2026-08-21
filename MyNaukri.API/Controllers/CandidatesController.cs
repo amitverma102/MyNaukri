@@ -212,7 +212,7 @@ public class CandidatesController : ControllerBase
         var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.UserId == userId);
         if (recruiter == null) return StatusCode(403, "User is not a recruiter.");
 
-        var candidate = await _context.Candidates.FindAsync(id);
+        var candidate = await _context.Candidates.Include(c => c.User).FirstOrDefaultAsync(c => c.Id == id);
         if (candidate == null) return NotFound("Candidate not found.");
 
         var rates = await _creditService.GetRatesAsync(recruiter.Id);
@@ -224,8 +224,31 @@ public class CandidatesController : ControllerBase
             return StatusCode(402, new { code = "INSUFFICIENT_CREDITS", message = "Insufficient credits.", requiredCredits, availableCredits = balance, shortfall = requiredCredits - balance });
         }
 
+        var access = await _context.CandidateContactAccesses.FirstOrDefaultAsync(a => a.RecruiterId == recruiter.Id && a.CandidateId == id);
+        if (access != null && access.HasDownloadedResume)
+        {
+            return Ok(new { ResumeUrl = candidate.ResumeUrl, CreditsDeducted = 0, RemainingBalance = balance });
+        }
+
         var deductionSuccess = await _creditService.DeductCreditsAsync(recruiter.Id, requiredCredits, Domain.Enums.TransactionType.RecruiterResumeDownload, candidate.Id.ToString(), $"Downloaded resume for candidate {candidate.User.FirstName}", userId);
         if (!deductionSuccess) return StatusCode(402, "Failed to deduct credits.");
+
+        if (access == null)
+        {
+            access = new MyNaukri.Domain.Entities.CandidateContactAccess 
+            { 
+                RecruiterId = recruiter.Id, 
+                CandidateId = id, 
+                HasDownloadedResume = true,
+                HasUnlockedContact = false
+            };
+            _context.CandidateContactAccesses.Add(access);
+        }
+        else
+        {
+            access.HasDownloadedResume = true;
+        }
+        await _context.SaveChangesAsync();
 
         return Ok(new { ResumeUrl = candidate.ResumeUrl, CreditsDeducted = requiredCredits, RemainingBalance = balance - requiredCredits });
     }
@@ -243,9 +266,8 @@ public class CandidatesController : ControllerBase
         var candidate = await _context.Candidates.Include(c => c.User).FirstOrDefaultAsync(c => c.Id == id);
         if (candidate == null) return NotFound("Candidate not found.");
 
-        // Check if already unlocked
         var access = await _context.CandidateContactAccesses.FirstOrDefaultAsync(a => a.RecruiterId == recruiter.Id && a.CandidateId == id);
-        if (access != null)
+        if (access != null && access.HasUnlockedContact)
         {
             return Ok(new { Email = candidate.User.Email, PhoneNumber = candidate.PhoneNumber, CreditsDeducted = 0 });
         }
@@ -259,15 +281,27 @@ public class CandidatesController : ControllerBase
             return StatusCode(402, new { code = "INSUFFICIENT_CREDITS", message = "Insufficient credits.", requiredCredits, availableCredits = balance, shortfall = requiredCredits - balance });
         }
 
-        var deductionSuccess = await _creditService.DeductCreditsAsync(recruiter.Id, requiredCredits, Domain.Enums.TransactionType.RecruiterContactView, candidate.Id.ToString(), $"Viewed contact for candidate {candidate.User.FirstName}", userId);
+        var deductionSuccess = await _creditService.DeductCreditsAsync(recruiter.Id, requiredCredits, Domain.Enums.TransactionType.RecruiterContactView, candidate.Id.ToString(), $"Unlocked contact for candidate {candidate.User.FirstName}", userId);
         if (!deductionSuccess) return StatusCode(402, "Failed to deduct credits.");
 
-        _context.CandidateContactAccesses.Add(new MyNaukri.Domain.Entities.CandidateContactAccess
+        if (access == null)
         {
-            RecruiterId = recruiter.Id,
-            CandidateId = id,
-            CreditsCharged = requiredCredits
-        });
+            access = new MyNaukri.Domain.Entities.CandidateContactAccess
+            {
+                RecruiterId = recruiter.Id,
+                CandidateId = candidate.Id,
+                HasUnlockedContact = true,
+                HasDownloadedResume = false,
+                CreditsCharged = requiredCredits
+            };
+            _context.CandidateContactAccesses.Add(access);
+        }
+        else
+        {
+            access.HasUnlockedContact = true;
+            access.CreditsCharged += requiredCredits;
+        }
+
         await _context.SaveChangesAsync();
 
         return Ok(new { Email = candidate.User.Email, PhoneNumber = candidate.PhoneNumber, CreditsDeducted = requiredCredits, RemainingBalance = balance - requiredCredits });
@@ -337,7 +371,52 @@ public class CandidatesController : ControllerBase
     [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
     public async Task<ActionResult<IEnumerable<CandidateSearchResultDto>>> SearchCandidates([FromQuery] CandidateSearchRequestDto request)
     {
-        var candidates = await _searchService.SearchCandidatesAsync(request);
+        var candidates = (await _searchService.SearchCandidatesAsync(request)).ToList();
+
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (Guid.TryParse(userIdString, out var userId))
+        {
+            var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.UserId == userId);
+            if (recruiter != null)
+            {
+                var candidateIds = candidates.Select(c => c.Id).ToList();
+                var accesses = await _context.CandidateContactAccesses
+                    .Where(a => a.RecruiterId == recruiter.Id && candidateIds.Contains(a.CandidateId))
+                    .ToDictionaryAsync(a => a.CandidateId);
+
+                if (accesses.Any())
+                {
+                    var candidatesEntities = await _context.Candidates.Include(c => c.User)
+                        .Where(c => candidateIds.Contains(c.Id))
+                        .ToDictionaryAsync(c => c.Id);
+
+                    foreach (var dto in candidates)
+                    {
+                        if (accesses.TryGetValue(dto.Id, out var access))
+                        {
+                            if (access.HasUnlockedContact)
+                            {
+                                dto.HasUnlockedContact = true;
+                                if (candidatesEntities.TryGetValue(dto.Id, out var cand))
+                                {
+                                    dto.Email = cand.User.Email;
+                                    dto.PhoneNumber = cand.PhoneNumber;
+                                }
+                            }
+                            if (access.HasDownloadedResume)
+                            {
+                                dto.HasDownloadedResume = true;
+                                if (candidatesEntities.TryGetValue(dto.Id, out var cand))
+                                {
+                                    dto.ResumeUrl = cand.ResumeUrl;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         return Ok(candidates);
     }
 }

@@ -32,7 +32,8 @@ export default function NavBar() {
 
   const isCandidate = role === 'Candidate';
   const isRecruiter = role === 'Recruiter' || role === 'CompanyHR';
-  const isAdmin = role === 'InstituteAdministrator' || role === 'SuperAdministrator' || role === 'Admin';
+  const isSuperAdmin = role === 'SuperAdministrator';
+  const isAdmin = role === 'InstituteAdministrator' || role === 'Admin';
 
   return (
     <AppBar position="static" color="inherit" elevation={0} sx={{ borderBottom: '1px solid rgba(0, 0, 0, 0.12)', bgcolor: 'white', color: 'text.primary' }}>
@@ -72,6 +73,13 @@ export default function NavBar() {
             <>
               <Button color="inherit" onClick={() => navigate('/admin/dashboard')}>Dashboard</Button>
               <Button color="inherit" onClick={() => navigate('/admin/profile')}>Settings</Button>
+            </>
+          )}
+          {isAuthenticated && isSuperAdmin && (
+            <>
+              <Button color="inherit" onClick={() => navigate('/superadmin/dashboard')}>Dashboard</Button>
+              <Button color="inherit" onClick={() => navigate('/superadmin/institutions')}>Institutions</Button>
+              <Button color="inherit" onClick={() => navigate('/superadmin/credit-transactions')}>Audit Logs</Button>
             </>
           )}
         </Box>

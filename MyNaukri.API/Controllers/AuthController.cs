@@ -43,9 +43,9 @@ public class AuthController : ControllerBase
             return BadRequest("Email already exists.");
         }
 
-        if (request.Role == Role.Recruiter)
+        if (request.Role != Role.Candidate)
         {
-            return BadRequest("Public recruiter registration is disabled. Please contact your School Administrator.");
+            return BadRequest("Public registration is only allowed for Candidates. Please contact an Administrator to create Recruiter or Institute Administrator accounts.");
         }
 
         var otp = GenerateOtp();
@@ -101,7 +101,10 @@ public class AuthController : ControllerBase
             return Unauthorized("User is inactive.");
         }
 
-        var token = _jwtProvider.Generate(user);
+        user.CurrentSessionId = Guid.NewGuid();
+        await _context.SaveChangesAsync();
+
+        var token = _jwtProvider.Generate(user, user.CurrentSessionId);
 
         return Ok(new AuthResponseDto { Token = token, Message = "Login successful." });
     }

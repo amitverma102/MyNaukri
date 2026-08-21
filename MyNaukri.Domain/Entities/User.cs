@@ -19,4 +19,6 @@ public class User : BaseEntity
     
     public string? ResetPasswordOtp { get; set; }
     public DateTime? ResetPasswordExpiry { get; set; }
+
+    public Guid? CurrentSessionId { get; set; }
 }

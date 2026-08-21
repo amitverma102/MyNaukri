@@ -19,6 +19,7 @@ public class Institution : BaseEntity
     public string Email { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
     public InstitutionStatus Status { get; set; } = InstitutionStatus.Active;
+    public int MaxRecruiters { get; set; } = 5;
     
     public ICollection<Recruiter> Recruiters { get; set; } = new List<Recruiter>();
     public ICollection<Job> Jobs { get; set; } = new List<Job>();

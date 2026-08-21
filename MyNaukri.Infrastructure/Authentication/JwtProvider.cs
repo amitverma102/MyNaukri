@@ -17,14 +17,20 @@ public class JwtProvider : IJwtProvider
         _options = options.Value;
     }
 
-    public string Generate(User user)
+    public string Generate(User user, Guid? sessionId = null)
     {
-        var claims = new Claim[]
+        var claims = new List<Claim>
         {
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(JwtRegisteredClaimNames.Email, user.Email),
             new(ClaimTypes.Role, user.Role.ToString())
         };
+
+        if (sessionId.HasValue)
+        {
+            claims.Add(new Claim("SessionId", sessionId.Value.ToString()));
+        }
 
         var signingCredentials = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SecretKey)),

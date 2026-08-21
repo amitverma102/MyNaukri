@@ -13,5 +13,6 @@ public enum TransactionType
     RecruiterPlatinumJobPosting = 9,
     RecruiterCandidateEmail = 10,
     CreditRefund = 11,
-    CreditAdjustment = 12
+    CreditAdjustment = 12,
+    SuperAdminCreditAllocation = 13
 }

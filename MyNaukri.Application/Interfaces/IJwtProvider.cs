@@ -4,5 +4,5 @@ namespace MyNaukri.Application.Interfaces;
 
 public interface IJwtProvider
 {
-    string Generate(User user);
+    string Generate(User user, Guid? sessionId = null);
 }

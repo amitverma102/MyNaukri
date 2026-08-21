@@ -18,7 +18,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 
-import api from '../api/axios';
+import api, { API_BASE_URL } from '../api/axios';
 
 interface Job {
   id: string;
@@ -37,7 +37,7 @@ interface Job {
 
 interface CreditTransaction {
   id: string;
-  amount: number;
+  credits: number;
   transactionType: string;
   description: string;
   createdAt: string;
@@ -84,6 +84,8 @@ interface Candidate {
   gender?: number;
   differentlyAbled?: boolean;
   exServiceman?: boolean;
+  hasUnlockedContact?: boolean;
+  hasDownloadedResume?: boolean;
 }
 
 const jobTypeMap: Record<string, string> = {
@@ -100,6 +102,7 @@ export default function RecruiterDashboard() {
   const [interviews, setInterviews] = useState<JobApplication[]>([]);
   
   const [creditBalance, setCreditBalance] = useState<number>(0);
+  const [creditRates, setCreditRates] = useState<any>({ contactViewRate: 2, resumeDownloadRate: 5 });
   const [creditHistory, setCreditHistory] = useState<CreditTransaction[]>([]);
   
   // Modals state
@@ -133,6 +136,9 @@ export default function RecruiterDashboard() {
     try {
       const balRes = await api.get('/recruiter/credits');
       setCreditBalance(balRes.data.availableCredits || balRes.data.balance || 0);
+      if (balRes.data.rates) {
+        setCreditRates(balRes.data.rates);
+      }
       const histRes = await api.get('/recruiter/credits/transactions');
       setCreditHistory(histRes.data);
     } catch (err) {
@@ -177,21 +183,32 @@ export default function RecruiterDashboard() {
 
   const handleUnlockContact = async (candidateId: string) => {
     try {
-      if (!window.confirm("This will deduct credits. Continue?")) return;
+      const rate = creditRates.contactViewRate || 2;
+      if (!window.confirm(`This will deduct ${rate} credits. Continue?`)) return;
       const response = await api.post(`/candidates/${candidateId}/contact/unlock`);
       alert(`Contact Unlocked!\nEmail: ${response.data.email}\nPhone: ${response.data.phoneNumber}`);
       fetchCredits(); // update balance
+      handleResdexSearch(new Event('submit') as any); // re-fetch search to update flags
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to unlock contact. Insufficient credits?");
     }
   };
 
-  const handleDownloadResume = async (candidateId: string) => {
+  const handleDownloadResume = async (candidate: Candidate) => {
     try {
-      if (!window.confirm("Downloading resume will deduct credits. Continue?")) return;
-      const response = await api.get(`/candidates/${candidateId}/resume/download`);
-      window.open(response.data.resumeUrl, '_blank');
-      fetchCredits(); // update balance
+      if (!candidate.hasDownloadedResume) {
+        const rate = creditRates.resumeDownloadRate || 5;
+        if (!window.confirm(`Downloading resume will deduct ${rate} credits. Continue?`)) return;
+      }
+      const response = await api.get(`/candidates/${candidate.id}/resume/download`);
+      const fullUrl = response.data.resumeUrl.startsWith('http') 
+        ? response.data.resumeUrl 
+        : `${API_BASE_URL}${response.data.resumeUrl}`;
+      window.open(fullUrl, '_blank');
+      if (!candidate.hasDownloadedResume) {
+        fetchCredits(); // update balance
+        handleResdexSearch(new Event('submit') as any); // re-fetch search to update flags
+      }
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to download resume. Insufficient credits?");
     }
@@ -651,23 +668,30 @@ export default function RecruiterDashboard() {
                     {!candidate.skills && !candidate.classesTaught && !candidate.boardsTaught && 'N/A'}
                   </TableCell>
                   <TableCell align="right">
+                    {candidate.hasUnlockedContact ? (
+                      <Box sx={{ textAlign: 'left', mb: 2, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
+                        <Typography variant="body2"><b>Email:</b> {candidate.email}</Typography>
+                        <Typography variant="body2"><b>Phone:</b> {candidate.phoneNumber}</Typography>
+                      </Box>
+                    ) : (
+                      <Button 
+                        variant="outlined" 
+                        size="small" 
+                        onClick={() => handleUnlockContact(candidate.id)}
+                        sx={{ mr: 1, mb: 1, display: 'block', width: '100%' }}
+                      >
+                        Unlock Contact
+                      </Button>
+                    )}
                     <Button 
                       variant="outlined" 
-                      size="small" 
-                      onClick={() => handleUnlockContact(candidate.id)}
-                      sx={{ mr: 1, mb: 1 }}
-                    >
-                      Unlock Contact
-                    </Button>
-                    <Button 
-                      variant="outlined" 
-                      color="secondary"
+                      color={candidate.hasDownloadedResume ? "success" : "secondary"}
                       size="small" 
                       startIcon={<DescriptionIcon />}
-                      onClick={() => handleDownloadResume(candidate.id)}
-                      sx={{ mb: 1 }}
+                      onClick={() => handleDownloadResume(candidate)}
+                      sx={{ mb: 1, width: '100%' }}
                     >
-                      Resume
+                      {candidate.hasDownloadedResume ? "Download Resume" : "Unlock Resume"}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -720,8 +744,8 @@ export default function RecruiterDashboard() {
                   <Chip label={tx.transactionType} size="small" variant="outlined" />
                 </TableCell>
                 <TableCell align="right">
-                  <Typography sx={{ fontWeight: 'bold', color: tx.amount > 0 ? 'success.main' : 'error.main' }}>
-                    {tx.amount > 0 ? '+' : ''}{tx.amount}
+                  <Typography sx={{ fontWeight: 'bold', color: tx.credits > 0 ? 'success.main' : 'error.main' }}>
+                    {tx.credits > 0 ? '+' : ''}{tx.credits}
                   </Typography>
                 </TableCell>
               </TableRow>

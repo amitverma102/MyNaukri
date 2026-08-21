@@ -19,6 +19,12 @@ public class CandidateSearchResultDto
     public bool ExServiceman { get; set; }
     public ExServicemanBranch? ExServicemanBranch { get; set; }
     
-    // We intentionally OMIT PII like Email, PhoneNumber, and ResumeUrl.
-    // Recruiters must spend credits to unlock those.
+    // Access flags
+    public bool HasUnlockedContact { get; set; }
+    public bool HasDownloadedResume { get; set; }
+    
+    // These will be populated ONLY if the corresponding access is unlocked
+    public string? Email { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? ResumeUrl { get; set; }
 }
