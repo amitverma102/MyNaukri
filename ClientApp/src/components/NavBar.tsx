@@ -52,8 +52,14 @@ export default function NavBar() {
           {!isAuthenticated && (
             <>
               <Button color="inherit" onClick={() => navigate('/jobs')} sx={{ textTransform: 'none', fontWeight: 500 }}>Jobs</Button>
-              <Button color="inherit" sx={{ textTransform: 'none', fontWeight: 500 }}>Institutions</Button>
-              <Button color="inherit" sx={{ textTransform: 'none', fontWeight: 500 }}>Services</Button>
+              <Button color="inherit" onClick={() => {
+                if (location.pathname !== '/') navigate('/#institutions');
+                else document.getElementById('institutions')?.scrollIntoView({ behavior: 'smooth' });
+              }} sx={{ textTransform: 'none', fontWeight: 500 }}>Institutions</Button>
+              <Button color="inherit" onClick={() => {
+                if (location.pathname !== '/') navigate('/#services');
+                else document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' });
+              }} sx={{ textTransform: 'none', fontWeight: 500 }}>Services</Button>
             </>
           )}
           {isAuthenticated && isCandidate && (
@@ -93,9 +99,6 @@ export default function NavBar() {
               </Button>
               <Button variant="contained" onClick={() => navigate('/register')} sx={{ ml: 2, borderRadius: 20, px: 3, textTransform: 'none', fontWeight: 600, bgcolor: '#f16521', '&:hover': { bgcolor: '#d95a1c' } }}>
                 Register
-              </Button>
-              <Button color="inherit" onClick={() => navigate('/login')} sx={{ ml: 2, textTransform: 'none', color: 'text.secondary' }}>
-                For employers
               </Button>
             </>
           )}

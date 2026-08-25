@@ -15,11 +15,12 @@ public class DbSearchService : ISearchService
         _context = context;
     }
 
-    public async Task<IEnumerable<JobDto>> SearchJobsAsync(string query)
+    public async Task<IEnumerable<JobDto>> SearchJobsAsync(string query, Guid? candidateId = null)
     {
         var dbQuery = _context.Jobs
             .Include(j => j.Institution)
-            .Where(j => j.IsActive);
+            .Where(j => j.IsActive)
+            .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(query))
         {
@@ -31,12 +32,12 @@ public class DbSearchService : ISearchService
                 j.Institution.Name.ToLower().Contains(lowerQuery));
         }
 
-        var jobs = await dbQuery
-            .OrderByDescending(j => j.CreatedAt)
-            .Take(100)
+        var jobsList = await dbQuery
+            .OrderByDescending(j => j.IsPlatinum)
+            .ThenByDescending(j => j.CreatedAt)
+            .Take(1000)
             .ToListAsync();
-
-        return jobs.Select(j => new JobDto
+        var result = jobsList.Select(j => new JobDto
         {
             Id = j.Id,
             Title = j.Title,
@@ -51,8 +52,54 @@ public class DbSearchService : ISearchService
             CreatedAt = j.CreatedAt,
             IsActive = j.IsActive,
             CompanyName = j.Institution.Name,
-            Keywords = j.Keywords
-        });
+            Keywords = j.Keywords,
+            IsPlatinum = j.IsPlatinum
+        }).ToList();
+
+        if (candidateId.HasValue)
+        {
+            var candidate = await _context.Candidates.FindAsync(candidateId.Value);
+            if (candidate != null)
+            {
+                var appliedJobIds = await _context.JobApplications
+                    .Where(ja => ja.CandidateId == candidateId.Value)
+                    .Select(ja => ja.JobId)
+                    .ToListAsync();
+
+                foreach (var j in result)
+                {
+                    j.IsApplied = appliedJobIds.Contains(j.Id);
+                }
+
+                var prefLocations = (candidate.PreferredLocations ?? "").ToLower().Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+                var currLocation = (candidate.CurrentLocation ?? "").ToLower().Trim();
+                if (!string.IsNullOrEmpty(currLocation) && !prefLocations.Contains(currLocation)) prefLocations.Add(currLocation);
+
+                var subjects = new List<string>();
+                subjects.AddRange((candidate.Skills ?? "").ToLower().Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
+                subjects.AddRange((candidate.ClassesTaught ?? "").ToLower().Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
+                subjects.AddRange((candidate.BoardsTaught ?? "").ToLower().Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
+                subjects = subjects.Distinct().ToList();
+
+                result = result.OrderByDescending(j => j.IsPlatinum)
+                .ThenByDescending(j => {
+                    var jobLoc = (j.Location ?? "").ToLower();
+                    var jobText = ((j.Title ?? "") + " " + (j.Description ?? "") + " " + (j.Keywords ?? "")).ToLower();
+                    bool isLocMatch = prefLocations.Any(pl => jobLoc.Contains(pl) || pl.Contains(jobLoc));
+                    bool isSubjMatch = subjects.Any(s => jobText.Contains(s));
+                    return isLocMatch || isSubjMatch ? 1 : 0;
+                })
+                .ThenByDescending(j => j.CreatedAt)
+                .ToList();
+                
+                return result;
+            }
+        }
+
+        return result
+            .OrderByDescending(j => j.IsPlatinum)
+            .ThenByDescending(j => j.CreatedAt)
+            .ToList();
     }
 
     public async Task<IEnumerable<CandidateSearchResultDto>> SearchCandidatesAsync(CandidateSearchRequestDto request)

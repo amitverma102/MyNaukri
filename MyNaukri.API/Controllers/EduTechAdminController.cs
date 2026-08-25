@@ -10,7 +10,7 @@ namespace MyNaukri.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "EduTechAdmin")] // Or equivalent SuperAdmin role
+[Authorize(Roles = "SuperAdministrator")] // Or equivalent SuperAdmin role
 public class EduTechAdminController : ControllerBase
 {
     private readonly ApplicationDbContext _context;

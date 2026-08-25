@@ -18,6 +18,7 @@
     "axios": "^1.19.0",
     "formik": "^2.4.9",
     "jwt-decode": "^4.0.0",
+    "puppeteer": "^25.8.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.3.0",

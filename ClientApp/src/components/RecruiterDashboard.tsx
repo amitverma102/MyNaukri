@@ -188,7 +188,7 @@ export default function RecruiterDashboard() {
       const response = await api.post(`/candidates/${candidateId}/contact/unlock`);
       alert(`Contact Unlocked!\nEmail: ${response.data.email}\nPhone: ${response.data.phoneNumber}`);
       fetchCredits(); // update balance
-      handleResdexSearch(new Event('submit') as any); // re-fetch search to update flags
+      handleResdexSearch(); // re-fetch search to update flags
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to unlock contact. Insufficient credits?");
     }
@@ -207,7 +207,7 @@ export default function RecruiterDashboard() {
       window.open(fullUrl, '_blank');
       if (!candidate.hasDownloadedResume) {
         fetchCredits(); // update balance
-        handleResdexSearch(new Event('submit') as any); // re-fetch search to update flags
+        handleResdexSearch(); // re-fetch search to update flags
       }
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to download resume. Insufficient credits?");

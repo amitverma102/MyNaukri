@@ -28,18 +28,23 @@ export default function Login() {
       localStorage.setItem('jwt_token', data.token);
       const decoded: any = jwtDecode(data.token);
       const role = decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || decoded.role;
-      
+      const searchParams = new URLSearchParams(location.search);
+      const returnUrl = searchParams.get('returnUrl');
+      const applyJobId = searchParams.get('applyJobId');
+
+      let targetUrl = '';
       if (role === 'Recruiter' || role === 'CompanyHR') {
-        navigate('/recruiter/dashboard');
+        targetUrl = '/recruiter/dashboard';
       } else if (role === 'SuperAdministrator') {
-        navigate('/superadmin/dashboard');
+        targetUrl = '/superadmin/dashboard';
       } else if (role === 'InstituteAdministrator') {
-        navigate('/instituteadmin/dashboard');
+        targetUrl = '/instituteadmin/dashboard';
       } else if (role === 'Admin') {
-        navigate('/admin/dashboard');
+        targetUrl = '/admin/dashboard';
       } else {
-        navigate('/candidate/dashboard');
+        targetUrl = returnUrl ? `${returnUrl}${applyJobId ? `?applyJobId=${applyJobId}` : ''}` : '/candidate/dashboard';
       }
+      navigate(targetUrl);
     }
   });
 
@@ -51,6 +56,11 @@ export default function Login() {
   return (
     <Container maxWidth="sm">
       <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <Link component={RouterLink} to="/" style={{ textDecoration: 'none', color: 'inherit', marginBottom: '16px' }}>
+          <Typography variant="h4" color="primary" sx={{ fontWeight: 'bold' }}>
+            Edu360
+          </Typography>
+        </Link>
         <Typography component="h1" variant="h5">Sign in to Edu360</Typography>
         <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
           {successMsg && <Alert severity="success" sx={{ mb: 2 }}>{successMsg}</Alert>}

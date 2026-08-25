@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Container, Typography, Paper, Box, Button, TableContainer, Table, TableHead, TableRow, TableCell, TableBody,
   Grid, Card, CardContent, TextField, Select, MenuItem, InputLabel, FormControl, Chip, IconButton, Tooltip
@@ -167,8 +167,8 @@ const RecruiterManagement = () => {
       {summary && (
         <Card sx={{ mb: 4, borderLeft: isLimitReached ? '4px solid #f44336' : '4px solid #4caf50' }}>
           <CardContent>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={8}>
+            <Grid container spacing={2} sx={{ alignItems: 'center' }}>
+              <Grid size={{ xs: 12, md: 8 }}>
                 <Typography variant="h6">Active Recruiters: {summary.currentRecruiters} / {summary.maxRecruiters}</Typography>
                 <Typography color="textSecondary">Available Slots: {summary.availableSlots}</Typography>
                 {isLimitReached && (
@@ -177,7 +177,7 @@ const RecruiterManagement = () => {
                   </Typography>
                 )}
               </Grid>
-              <Grid item xs={12} md={4} sx={{ textAlign: { xs: 'left', md: 'right' } }}>
+              <Grid size={{ xs: 12, md: 4 }} sx={{ textAlign: { xs: 'left', md: 'right' } }}>
                 <Tooltip title={isLimitReached ? "Maximum recruiter limit reached. Contact your administrator to increase the recruiter limit." : ""}>
                   <span>
                     <Button 
@@ -323,7 +323,7 @@ const RecruiterManagement = () => {
             variant="outlined"
             value={creditAmount}
             onChange={(e) => setCreditAmount(Number(e.target.value))}
-            inputProps={{ min: 1 }}
+            slotProps={{ htmlInput: { min: 1 } }}
           />
           <TextField
             margin="dense"

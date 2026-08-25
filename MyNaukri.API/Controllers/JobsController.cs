@@ -29,25 +29,18 @@ public class JobsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<JobDto>>> GetJobs()
     {
-        var jobs = await _context.Jobs
-            .Where(j => j.IsActive)
-            .Select(j => new JobDto
+        Guid? candidateId = null;
+        if (User.Identity?.IsAuthenticated == true && User.IsInRole("Candidate"))
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (Guid.TryParse(userIdStr, out var userId))
             {
-                Id = j.Id,
-                Title = j.Title,
-                Description = j.Description,
-                Requirements = j.Requirements,
-                MinSalary = j.MinSalary,
-                MaxSalary = j.MaxSalary,
-                JobType = j.JobType,
-                Location = j.Location,
-                RecruiterId = j.RecruiterId,
-                InstitutionId = j.InstitutionId,
-                CreatedAt = j.CreatedAt,
-                CompanyName = j.Institution.Name,
-                Keywords = j.Keywords
-            })
-            .ToListAsync();
+                var candidate = await _context.Candidates.FirstOrDefaultAsync(c => c.UserId == userId);
+                if (candidate != null) candidateId = candidate.Id;
+            }
+        }
+
+        var jobs = await _searchService.SearchJobsAsync("", candidateId);
 
         return Ok(jobs);
     }
@@ -139,7 +132,18 @@ public class JobsController : ControllerBase
             return BadRequest("Search query cannot be empty.");
         }
 
-        var results = await _searchService.SearchJobsAsync(query);
+        Guid? candidateId = null;
+        if (User.Identity?.IsAuthenticated == true && User.IsInRole("Candidate"))
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (Guid.TryParse(userIdStr, out var userId))
+            {
+                var candidate = await _context.Candidates.FirstOrDefaultAsync(c => c.UserId == userId);
+                if (candidate != null) candidateId = candidate.Id;
+            }
+        }
+
+        var results = await _searchService.SearchJobsAsync(query, candidateId);
         return Ok(results);
     }
 

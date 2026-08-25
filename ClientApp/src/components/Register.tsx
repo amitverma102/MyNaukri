@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Box, Button, TextField, Typography, Container, Alert, Link, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
+import { Box, Button, TextField, Typography, Container, Alert, Link } from '@mui/material';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import api from '../api/axios';
 
@@ -9,7 +9,7 @@ export default function Register() {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('Candidate');
+  const [role] = useState('Candidate');
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
 
@@ -36,6 +36,11 @@ export default function Register() {
   return (
     <Container maxWidth="sm">
       <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <Link component={RouterLink} to="/" style={{ textDecoration: 'none', color: 'inherit', marginBottom: '16px' }}>
+          <Typography variant="h4" color="primary" sx={{ fontWeight: 'bold' }}>
+            Edu360
+          </Typography>
+        </Link>
         <Typography component="h1" variant="h5">Sign up for Edu360</Typography>
         <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
           {errorMsg && <Alert severity="error">{errorMsg}</Alert>}

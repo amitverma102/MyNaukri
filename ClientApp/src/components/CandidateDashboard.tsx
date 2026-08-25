@@ -64,8 +64,10 @@ export default function Dashboard() {
       alert('Applied successfully!');
       queryClient.invalidateQueries({ queryKey: ['applications'] });
     },
-    onError: (error: any) => {
-      alert(error.response?.data || 'Failed to apply.');
+    onError: (err: any) => {
+      const data = err.response?.data;
+      const message = typeof data === 'string' && data ? data : (data?.title || data?.message || err.message || 'Failed to apply.');
+      alert(message);
     }
   });
 

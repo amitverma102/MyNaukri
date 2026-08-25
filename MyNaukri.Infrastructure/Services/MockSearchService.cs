@@ -6,7 +6,7 @@ namespace MyNaukri.Infrastructure.Services;
 
 public class MockSearchService : ISearchService
 {
-    public Task<IEnumerable<JobDto>> SearchJobsAsync(string query)
+    public Task<IEnumerable<JobDto>> SearchJobsAsync(string query, Guid? candidateId = null)
     {
         // Mock search results
         var results = new List<JobDto>

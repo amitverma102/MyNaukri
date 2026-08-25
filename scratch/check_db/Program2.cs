@@ -10,7 +10,7 @@ class Program
     {
         // wait, I don't have a token for recav1@edu.net. I'd have to login first.
         var client = new HttpClient();
-        var loginData = new { Email = "recav1@edu.net", Password = "Password123!" };
+        var loginData = new { Email = "recav1@edu.net", Password = "Sch@123" };
         var content = new StringContent(JsonSerializer.Serialize(loginData), Encoding.UTF8, "application/json");
         var loginRes = await client.PostAsync("http://localhost:5200/api/auth/login", content);
         var loginStr = await loginRes.Content.ReadAsStringAsync();

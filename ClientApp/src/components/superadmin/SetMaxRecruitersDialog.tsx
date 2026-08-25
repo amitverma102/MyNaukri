@@ -65,7 +65,7 @@ const SetMaxRecruitersDialog: React.FC<Props> = ({ open, institutionId, currentM
           type="number" 
           value={maxRecruiters} 
           onChange={(e) => setMaxRecruiters(Number(e.target.value))} 
-          inputProps={{ min: 0 }}
+          slotProps={{ htmlInput: { min: 0 } }}
         />
       </DialogContent>
       <DialogActions>

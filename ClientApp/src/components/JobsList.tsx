@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, Typography, Container, CircularProgress, Box, Chip, Button, TextField, FormControl, InputLabel, Select, MenuItem, Grid, Paper, IconButton } from '@mui/material';
 import api from '../api/axios';
@@ -8,9 +8,10 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import { jwtDecode } from 'jwt-decode';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export default function JobsList() {
+  const navigate = useNavigate();
   const token = localStorage.getItem('jwt_token');
   let role = '';
   if (token) {
@@ -28,6 +29,17 @@ export default function JobsList() {
 
   // Filters State
   const [searchTerm, setSearchTerm] = useState(searchState?.searchTerm || '');
+
+  // Handle auto-apply from login redirect
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const applyJobId = searchParams.get('applyJobId');
+    if (applyJobId && isCandidate && !applyMutation.isPending) {
+      applyMutation.mutate(applyJobId);
+      // Remove the query param so we don't apply again on refresh
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.search, isCandidate, navigate]);
   const [companyNameFilter, setCompanyNameFilter] = useState(searchState?.companyName || '');
   const [locationFilter, setLocationFilter] = useState('');
   const [jobTypeFilter, setJobTypeFilter] = useState('All');
@@ -73,9 +85,13 @@ export default function JobsList() {
     },
     onSuccess: () => {
       alert('Applied successfully!');
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['recommended-jobs'] });
     },
     onError: (error: any) => {
-      alert(error.response?.data || 'Failed to apply.');
+      const data = error.response?.data;
+      const message = typeof data === 'string' && data ? data : (data?.title || data?.message || error.message || 'Failed to apply.');
+      alert(message);
     }
   });
 
@@ -165,22 +181,30 @@ export default function JobsList() {
                     {job.description}
                   </Typography>
                 </Box>
-                {isCandidate && (
+                {(!role || isCandidate) && (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <IconButton 
-                      color="primary" 
-                      onClick={() => saveMutation.mutate(job.id)}
-                      disabled={saveMutation.isPending}
-                      title={savedJobIds.has(job.id) ? "Unsave Job" : "Save Job"}
-                    >
-                      {savedJobIds.has(job.id) ? <BookmarkIcon /> : <BookmarkBorderIcon />}
-                    </IconButton>
+                    {isCandidate && (
+                      <IconButton 
+                        color="primary" 
+                        onClick={() => saveMutation.mutate(job.id)}
+                        disabled={saveMutation.isPending}
+                        title={savedJobIds.has(job.id) ? "Unsave Job" : "Save Job"}
+                      >
+                        {savedJobIds.has(job.id) ? <BookmarkIcon /> : <BookmarkBorderIcon />}
+                      </IconButton>
+                    )}
                     <Button 
-                      variant="contained" 
-                      onClick={() => applyMutation.mutate(job.id)}
-                      disabled={applyMutation.isPending}
+                      variant={job.isApplied ? "outlined" : "contained"} 
+                      onClick={() => {
+                        if (!token) {
+                          navigate(`/login?returnUrl=/jobs&applyJobId=${job.id}`);
+                        } else {
+                          applyMutation.mutate(job.id);
+                        }
+                      }}
+                      disabled={(isCandidate && applyMutation.isPending) || job.isApplied}
                     >
-                      Apply
+                      {job.isApplied ? 'Applied' : 'Apply'}
                     </Button>
                   </Box>
                 )}
@@ -271,6 +295,7 @@ export default function JobsList() {
               <Box>
                 <Typography variant="h6" component="div">
                   {job.title}
+                  {job.isPlatinum && <Chip size="small" label="Platinum" color="secondary" sx={{ ml: 1, height: 20, fontSize: '0.65rem' }} />}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
                   {job.companyName || 'Unknown Institution'} • Job ID: {job.id?.substring(0, 8)}
@@ -283,22 +308,30 @@ export default function JobsList() {
                   {job.description}
                 </Typography>
               </Box>
-              {isCandidate && (
+              {(!role || isCandidate) && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <IconButton 
-                    color="primary" 
-                    onClick={() => saveMutation.mutate(job.id)}
-                    disabled={saveMutation.isPending}
-                    title={savedJobIds.has(job.id) ? "Unsave Job" : "Save Job"}
-                  >
-                    {savedJobIds.has(job.id) ? <BookmarkIcon /> : <BookmarkBorderIcon />}
-                  </IconButton>
+                  {isCandidate && (
+                    <IconButton 
+                      color="primary" 
+                      onClick={() => saveMutation.mutate(job.id)}
+                      disabled={saveMutation.isPending}
+                      title={savedJobIds.has(job.id) ? "Unsave Job" : "Save Job"}
+                    >
+                      {savedJobIds.has(job.id) ? <BookmarkIcon /> : <BookmarkBorderIcon />}
+                    </IconButton>
+                  )}
                   <Button 
-                    variant="contained" 
-                    onClick={() => applyMutation.mutate(job.id)}
-                    disabled={applyMutation.isPending}
+                    variant={job.isApplied ? "outlined" : "contained"} 
+                    onClick={() => {
+                      if (!token) {
+                        navigate(`/login?returnUrl=/jobs&applyJobId=${job.id}`);
+                      } else {
+                        applyMutation.mutate(job.id);
+                      }
+                    }}
+                    disabled={(isCandidate && applyMutation.isPending) || job.isApplied}
                   >
-                    Apply
+                    {job.isApplied ? 'Applied' : 'Apply'}
                   </Button>
                 </Box>
               )}

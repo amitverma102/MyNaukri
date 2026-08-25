@@ -98,29 +98,29 @@ const CreateEditRecruiterDialog: React.FC<Props> = ({ open, onClose, onSuccess, 
         <DialogContent dividers>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField fullWidth name="firstName" label="First Name" value={formData.firstName} onChange={handleChange} required />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField fullWidth name="lastName" label="Last Name" value={formData.lastName} onChange={handleChange} required />
             </Grid>
             {!isEdit && (
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField fullWidth name="email" label="Email" type="email" value={formData.email} onChange={handleChange} required />
               </Grid>
             )}
             {!isEdit && (
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField fullWidth name="password" label="Temporary Password" type="password" value={formData.password} onChange={handleChange} required />
               </Grid>
             )}
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField fullWidth name="mobile" label="Mobile" value={formData.mobile} onChange={handleChange} />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField fullWidth name="designation" label="Designation" value={formData.designation} onChange={handleChange} />
             </Grid>
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <TextField fullWidth name="department" label="Department" value={formData.department} onChange={handleChange} />
             </Grid>
           </Grid>

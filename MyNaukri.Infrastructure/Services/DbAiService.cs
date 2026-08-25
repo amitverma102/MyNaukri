@@ -364,6 +364,11 @@ Resume Text:
             .Where(j => j.IsActive)
             .ToListAsync();
 
+        var appliedJobIds = await _context.JobApplications
+            .Where(ja => ja.CandidateId == candidateId)
+            .Select(ja => ja.JobId)
+            .ToListAsync();
+
         var scoredJobs = new List<(JobDto Job, int Score)>();
 
         foreach (var job in allJobs)
@@ -395,7 +400,8 @@ Resume Text:
                     RecruiterId = job.RecruiterId,
                     InstitutionId = job.InstitutionId,
                     CreatedAt = job.CreatedAt,
-                    CompanyName = job.Institution?.Name ?? string.Empty
+                    CompanyName = job.Institution?.Name ?? string.Empty,
+                    IsApplied = appliedJobIds.Contains(job.Id)
                 };
                 
                 scoredJobs.Add((dto, score));

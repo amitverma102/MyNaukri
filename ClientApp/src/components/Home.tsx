@@ -90,8 +90,8 @@ export default function Home() {
         </Box>
       </Box>
 
-      {/* Quick Links Section */}
-      <Box sx={{ maxWidth: '1000px', mx: 'auto', mt: -3, textAlign: 'center' }}>
+      {/* Quick Links / Services Section */}
+      <Box id="services" sx={{ maxWidth: '1000px', mx: 'auto', mt: -3, textAlign: 'center' }}>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 2 }}>
           <Chip icon={<SchoolIcon />} label="Teaching" variant="outlined" sx={{ bgcolor: 'white', p: 2, borderRadius: 3, fontWeight: 500 }} clickable onClick={() => navigate('/jobs', { state: { searchTerm: 'Teaching' } })} />
           <Chip icon={<AccountBalanceIcon />} label="Principal" variant="outlined" sx={{ bgcolor: 'white', p: 2, borderRadius: 3, fontWeight: 500 }} clickable onClick={() => navigate('/jobs', { state: { searchTerm: 'Principal' } })} />
@@ -110,7 +110,7 @@ export default function Home() {
       </Box>
 
       {/* Top Companies Section */}
-      <Box sx={{ maxWidth: '1200px', mx: 'auto', mt: 8, px: 2 }}>
+      <Box id="institutions" sx={{ maxWidth: '1200px', mx: 'auto', mt: 8, px: 2 }}>
         <Typography variant="h5" align="center" sx={{ fontWeight: 'bold', mb: 4 }}>
           Top institutions hiring now
         </Typography>

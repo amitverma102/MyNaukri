@@ -57,11 +57,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 {
                     if (Guid.TryParse(userIdClaim, out var userId))
                     {
+                        var authLogger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                        var allClaims = string.Join(", ", context.Principal.Claims.Select(c => $"{c.Type}: {c.Value}"));
+                        authLogger.LogInformation("All Claims: {AllClaims}", allClaims);
+                        
                         var user = await dbContext.Users.FindAsync(userId);
                         if (user != null)
                         {
-                            if (user.CurrentSessionId?.ToString() != sessionIdClaim)
+                            var currentDbSession = user.CurrentSessionId?.ToString();
+                            if (currentDbSession != null && !currentDbSession.Equals(sessionIdClaim, StringComparison.OrdinalIgnoreCase))
                             {
+                                var authLogger2 = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                                authLogger2.LogWarning("Session invalidated. DB Session: {DbSession}, Token Session: {TokenSession}", currentDbSession, sessionIdClaim);
                                 context.Fail("Session invalidated due to new login.");
                             }
                         }

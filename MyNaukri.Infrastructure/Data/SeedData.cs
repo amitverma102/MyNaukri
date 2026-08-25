@@ -66,6 +66,45 @@ public static class SeedData
                 InstitutionId = institution.Id
             };
             context.Recruiters.Add(recruiter);
+            
+            var creditRate = new RecruiterCreditRate
+            {
+                Recruiter = recruiter,
+                ResumeDownloadRate = 5,
+                ContactViewRate = 2,
+                BulkProfileDownloadRate = 2,
+                NormalJobPostingRate = 20,
+                PlatinumJobPostingRate = 40,
+                CandidateEmailRate = 3
+            };
+            context.RecruiterCreditRates.Add(creditRate);
+            
+            await context.SaveChangesAsync();
+        }
+
+        var candidateUser = await context.Users.FirstOrDefaultAsync(u => u.Email == "candidate@test.com");
+        if (candidateUser == null)
+        {
+            candidateUser = new User
+            {
+                FirstName = "Test",
+                LastName = "Candidate",
+                Email = "candidate@test.com",
+                PasswordHash = BCrypt.Net.BCrypt.EnhancedHashPassword("Password@123"),
+                Role = Role.Candidate,
+                IsEmailVerified = true
+            };
+            context.Users.Add(candidateUser);
+            await context.SaveChangesAsync();
+
+            var candidate = new Candidate
+            {
+                UserId = candidateUser.Id,
+                PhoneNumber = "1234567890",
+                Skills = "React, Node.js",
+                TotalExperienceYears = 3
+            };
+            context.Candidates.Add(candidate);
             await context.SaveChangesAsync();
         }
 
