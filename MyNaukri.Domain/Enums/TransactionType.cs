@@ -14,5 +14,8 @@ public enum TransactionType
     RecruiterCandidateEmail = 10,
     CreditRefund = 11,
     CreditAdjustment = 12,
-    SuperAdminCreditAllocation = 13
+    SuperAdminCreditAllocation = 13,
+    CreditExpiry = 14,
+    TopUp = 15,
+    AnnualRecharge = 16
 }

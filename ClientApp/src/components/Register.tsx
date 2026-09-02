@@ -37,11 +37,13 @@ export default function Register() {
     <Container maxWidth="sm">
       <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Link component={RouterLink} to="/" style={{ textDecoration: 'none', color: 'inherit', marginBottom: '16px' }}>
-          <Typography variant="h4" color="primary" sx={{ fontWeight: 'bold' }}>
-            Edu360
-          </Typography>
+          <img 
+            src="/logo.jpg" 
+            alt="EduKey360" 
+            style={{ height: '60px', objectFit: 'contain' }} 
+          />
         </Link>
-        <Typography component="h1" variant="h5">Sign up for Edu360</Typography>
+        <Typography component="h1" variant="h5">Sign up for EduKey360</Typography>
         <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
           {errorMsg && <Alert severity="error">{errorMsg}</Alert>}
           <TextField

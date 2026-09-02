@@ -57,16 +57,24 @@ export default function Login() {
     <Container maxWidth="sm">
       <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Link component={RouterLink} to="/" style={{ textDecoration: 'none', color: 'inherit', marginBottom: '16px' }}>
-          <Typography variant="h4" color="primary" sx={{ fontWeight: 'bold' }}>
-            Edu360
-          </Typography>
+          <img 
+            src="/logo.jpg" 
+            alt="EduKey360" 
+            style={{ height: '60px', objectFit: 'contain' }} 
+          />
         </Link>
-        <Typography component="h1" variant="h5">Sign in to Edu360</Typography>
+        <Typography component="h1" variant="h5">Sign in to EduKey360</Typography>
         <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
           {successMsg && <Alert severity="success" sx={{ mb: 2 }}>{successMsg}</Alert>}
           {loginMutation.isError && (
             <Alert severity="error" sx={{ mb: 2 }}>
-              {(loginMutation.error as any)?.response?.data || 'Login failed. Please check credentials.'}
+              {(() => {
+                const errorData = (loginMutation.error as any)?.response?.data;
+                if (typeof errorData === 'string') return errorData;
+                if (errorData?.title) return errorData.title;
+                if (errorData?.message) return errorData.message;
+                return 'Login failed. Please check credentials.';
+              })()}
               {((loginMutation.error as any)?.response?.status === 403) && (
                 <Box sx={{ mt: 1 }}>
                   <Link component={RouterLink} to={`/verify-otp?email=${encodeURIComponent(email)}`}>

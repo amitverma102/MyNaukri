@@ -41,6 +41,8 @@ interface CreditTransaction {
   transactionType: string;
   description: string;
   createdAt: string;
+  balanceBefore: number;
+  balanceAfter: number;
 }
 
 interface JobApplication {
@@ -102,6 +104,7 @@ export default function RecruiterDashboard() {
   const [interviews, setInterviews] = useState<JobApplication[]>([]);
   
   const [creditBalance, setCreditBalance] = useState<number>(0);
+
   const [creditRates, setCreditRates] = useState<any>({ contactViewRate: 2, resumeDownloadRate: 5 });
   const [creditHistory, setCreditHistory] = useState<CreditTransaction[]>([]);
   
@@ -136,6 +139,7 @@ export default function RecruiterDashboard() {
     try {
       const balRes = await api.get('/recruiter/credits');
       setCreditBalance(balRes.data.availableCredits || balRes.data.balance || 0);
+
       if (balRes.data.rates) {
         setCreditRates(balRes.data.rates);
       }
@@ -724,6 +728,8 @@ export default function RecruiterDashboard() {
         </Box>
       </Box>
 
+
+
       <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>Transaction History</Typography>
       <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #e0e0e0', borderRadius: 2 }}>
         <Table>
@@ -744,9 +750,15 @@ export default function RecruiterDashboard() {
                   <Chip label={tx.transactionType} size="small" variant="outlined" />
                 </TableCell>
                 <TableCell align="right">
-                  <Typography sx={{ fontWeight: 'bold', color: tx.credits > 0 ? 'success.main' : 'error.main' }}>
-                    {tx.credits > 0 ? '+' : ''}{tx.credits}
-                  </Typography>
+                  {(() => {
+                    const isDebit = tx.balanceAfter < tx.balanceBefore;
+                    const amount = Math.abs(Number(tx.credits));
+                    return (
+                      <Typography sx={{ fontWeight: 'bold', color: isDebit ? 'error.main' : 'success.main' }}>
+                        {isDebit ? '-' : '+'}{amount}
+                      </Typography>
+                    );
+                  })()}
                 </TableCell>
               </TableRow>
             ))}

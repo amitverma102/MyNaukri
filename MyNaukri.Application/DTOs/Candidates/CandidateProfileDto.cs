@@ -26,4 +26,6 @@ public class CandidateProfileDto
     public bool DifferentlyAbled { get; set; }
     public bool ExServiceman { get; set; }
     public string? ExServicemanBranch { get; set; }
+    
+    public bool IsSubscribedToJobAlerts { get; set; }
 }

@@ -254,7 +254,7 @@ public class JobsController : ControllerBase
         var institution = await _context.Institutions.FirstOrDefaultAsync();
         if (institution == null)
         {
-            institution = new Institution { Name = "Edu360 Global Trust", Description = "Premier network of educational institutes." };
+            institution = new Institution { Name = "EduKey360 Global Trust", Description = "Premier network of educational institutes." };
             _context.Institutions.Add(institution);
             await _context.SaveChangesAsync();
         }
@@ -262,7 +262,7 @@ public class JobsController : ControllerBase
         var recruiterUser = await _context.Users.FirstOrDefaultAsync(u => u.Role == MyNaukri.Domain.Enums.Role.Recruiter);
         if (recruiterUser == null)
         {
-            recruiterUser = new User { Email = "seed@edu360.com", PasswordHash = "hashed", FirstName = "Admin", LastName = "User", Role = MyNaukri.Domain.Enums.Role.Recruiter };
+            recruiterUser = new User { Email = "seed@edukey360.com", PasswordHash = "hashed", FirstName = "Admin", LastName = "User", Role = MyNaukri.Domain.Enums.Role.Recruiter };
             _context.Users.Add(recruiterUser);
             await _context.SaveChangesAsync();
         }

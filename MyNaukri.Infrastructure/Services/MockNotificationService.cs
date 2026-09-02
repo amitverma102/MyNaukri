@@ -1,14 +1,21 @@
+using Microsoft.Extensions.Logging;
 using MyNaukri.Application.Interfaces;
+using MyNaukri.Domain.Enums;
 
 namespace MyNaukri.Infrastructure.Services;
 
 public class MockNotificationService : INotificationService
 {
-    public Task SendEmailAsync(string to, string subject, string body)
+    private readonly ILogger<MockNotificationService> _logger;
+
+    public MockNotificationService(ILogger<MockNotificationService> logger)
     {
-        // Mock email sending by writing to console
-        Console.WriteLine($"[EMAIL SENT to {to}] Subject: {subject}");
-        Console.WriteLine(body);
+        _logger = logger;
+    }
+
+    public Task SendEmailAsync(string to, string subject, string body, EmailType emailType = EmailType.Default)
+    {
+        _logger.LogInformation("MOCK EMAIL [{EmailType}] sent to {To}: {Subject}", emailType, to, subject);
         return Task.CompletedTask;
     }
 }

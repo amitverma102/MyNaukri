@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyNaukri.Application.DTOs.Credits;
 using MyNaukri.Application.Interfaces;
+using MyNaukri.Domain.Enums;
 using MyNaukri.Infrastructure.Data;
 using System.Security.Claims;
 
@@ -33,10 +34,23 @@ public class CreditController : ControllerBase
 
         var balance = await _creditService.GetBalanceAsync(recruiter.Id);
         var rates = await _creditService.GetRatesAsync(recruiter.Id);
+        var batches = await _context.CreditBatches
+            .Where(b => b.RecruiterId == recruiter.Id && b.Status == CreditBatchStatus.Active && b.ExpiryDate >= DateTime.UtcNow)
+            .OrderBy(b => b.ExpiryDate)
+            .Select(b => new
+            {
+                b.Id,
+                b.OriginalQuantity,
+                b.RemainingQuantity,
+                b.CreditType,
+                b.ExpiryDate
+            })
+            .ToListAsync();
 
         return Ok(new
         {
             AvailableCredits = balance,
+            Batches = batches,
             Rates = new CreditRateDto
             {
                 ResumeDownloadRate = rates.ResumeDownloadRate ?? 5,

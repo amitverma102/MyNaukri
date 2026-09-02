@@ -27,7 +27,13 @@ export default function VerifyOtp() {
         navigate('/login');
       }, 2000);
     } catch (err: any) {
-      setError(err.response?.data || 'An error occurred during verification.');
+      const errorMsg = err.response?.data || 'An error occurred during verification.';
+      setError(errorMsg);
+      if (typeof errorMsg === 'string' && errorMsg.includes('abandoned')) {
+        setTimeout(() => {
+          navigate('/register');
+        }, 3000);
+      }
     }
   };
 

@@ -73,8 +73,9 @@ public class AuthController : ControllerBase
 
         await _notificationService.SendEmailAsync(
             user.Email,
-            "Verify your Edu360 Account",
-            $"Your verification code is: {otp}\nThis code will expire in 15 minutes."
+            "Verify your EduKey360 Account",
+            $"Your verification code is: {otp}\nThis code will expire in 15 minutes.",
+            emailType: MyNaukri.Domain.Enums.EmailType.Verification
         );
 
         return Ok(new AuthResponseDto { Message = "User registered. Please verify your email." });
@@ -120,13 +121,50 @@ public class AuthController : ControllerBase
 
         if (user.VerificationOtp != request.Otp || user.VerificationOtpExpiry < DateTime.UtcNow)
         {
-            return BadRequest("Invalid or expired OTP.");
+            user.FailedOtpAttempts++;
+            if (user.FailedOtpAttempts >= 3)
+            {
+                _context.Users.Remove(user);
+                await _context.SaveChangesAsync();
+                return BadRequest("Invalid or expired OTP. Too many failed attempts. Account creation has been abandoned. Please register again.");
+            }
+            
+            await _context.SaveChangesAsync();
+            return BadRequest($"Invalid or expired OTP. You have {3 - user.FailedOtpAttempts} attempts remaining.");
         }
 
         user.IsEmailVerified = true;
         user.VerificationOtp = null;
         user.VerificationOtpExpiry = null;
         await _context.SaveChangesAsync();
+
+        if (user.Role == Role.Candidate)
+        {
+            await _notificationService.SendEmailAsync(
+                user.Email,
+                "Welcome to Edukey360!",
+                $@"Dear {user.FirstName},
+
+Welcome to Edukey360!
+
+Your profile has been successfully registered with us. We connect talented educators, leaders, and support professionals with career opportunities across schools and educational institutions in India.
+
+What happens next:
+
+* Our team will review your profile for relevant current and upcoming opportunities.
+* If a suitable position matches your qualifications and preferences, we’ll contact you with the details and next steps.
+* Please keep your profile updated to ensure we can identify the best opportunities for you.
+
+We look forward to supporting you in your career journey and helping you find the right opportunity in the education sector.
+
+For any questions, please contact us at info@edukey360.com.
+
+Warm regards,
+Team Edukey360
+Experts in Educational Hiring
+www.edukey360.com"
+            );
+        }
 
         return Ok(new { Message = "Email verified successfully." });
     }
@@ -149,8 +187,9 @@ public class AuthController : ControllerBase
 
         await _notificationService.SendEmailAsync(
             user.Email,
-            "Reset your Edu360 Password",
-            $"Your password reset code is: {otp}\nThis code will expire in 15 minutes."
+            "EduKey360 - Password Reset",
+            $"Your password reset code is: {otp}\nIt will expire in 10 minutes.",
+            emailType: MyNaukri.Domain.Enums.EmailType.Verification
         );
 
         return Ok(new { Message = "If that email is in our system, we have sent a reset code." });

@@ -1,14 +1,15 @@
-import { Typography, Container, Grid, Card, CardContent, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Box } from '@mui/material';
+import { Typography, Container, Grid, Card, CardContent, Button, Box } from '@mui/material';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import RechargeModal from './instituteadmin/RechargeModal';
+import CreditTransactionTable from './superadmin/CreditTransactionTable';
 
 export default function InstituteAdminDashboard() {
-  const [wallet, setWallet] = useState<any>(null);
+  const [dashboard, setDashboard] = useState<any>(null);
   const [recruiterSummary, setRecruiterSummary] = useState<any>(null);
   
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
-  const [purchaseAmount, setPurchaseAmount] = useState<number>(0);
 
   const navigate = useNavigate();
 
@@ -18,30 +19,19 @@ export default function InstituteAdminDashboard() {
 
   const fetchData = async () => {
     try {
-      const [walletRes, summaryRes] = await Promise.all([
-        api.get('/instituteadmin/wallet'),
+      const [dashboardRes, summaryRes] = await Promise.all([
+        api.get('/instituteadmin/wallet/dashboard'),
         api.get('/instituteadmin/recruiters/summary')
       ]);
-      setWallet(walletRes.data);
+      setDashboard(dashboardRes.data);
       setRecruiterSummary(summaryRes.data);
     } catch (err) {
       console.error('Failed to fetch data', err);
     }
   };
 
-  const handlePurchase = async () => {
-    if (purchaseAmount <= 0) return;
-    try {
-      await api.post('/instituteadmin/wallet/purchase', { credits: purchaseAmount });
-      setIsPurchaseModalOpen(false);
-      fetchData();
-      alert('Credits purchased successfully!');
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to purchase credits.');
-    }
-  };
-
   const isLimitReached = recruiterSummary && !recruiterSummary.canCreateRecruiter;
+
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
@@ -51,17 +41,28 @@ export default function InstituteAdminDashboard() {
       
       <Grid container spacing={3} sx={{ mt: 1 }}>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ bgcolor: 'secondary.light', color: 'secondary.contrastText' }}>
+          <Card sx={{ bgcolor: 'secondary.light', color: 'secondary.contrastText', height: '100%' }}>
             <CardContent>
               <Typography variant="h6">Institution Wallet Balance</Typography>
-              <Typography variant="h2" sx={{ mt: 2 }}>{wallet?.availableCredits ?? 0}</Typography>
+              <Typography variant="h2" sx={{ mt: 2 }}>{dashboard?.availableCredits ?? 0}</Typography>
+              <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+                <Typography variant="body2">
+                  Total Purchased: {dashboard?.totalPurchasedCredits ?? 0}
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  Total Allocated: {dashboard?.totalAllocatedCredits ?? 0}
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  Unused Credits: {dashboard?.unusedCredits ?? 0}
+                </Typography>
+              </Box>
               <Button 
                 variant="contained" 
-                color="secondary" 
-                sx={{ mt: 2 }}
-                onClick={() => { setPurchaseAmount(0); setIsPurchaseModalOpen(true); }}
+                color="primary" 
+                sx={{ mt: 3, bgcolor: 'white', color: 'secondary.main', '&:hover': { bgcolor: '#f5f5f5' } }}
+                onClick={() => setIsPurchaseModalOpen(true)}
               >
-                Purchase Credits
+                Recharge Credits
               </Button>
             </CardContent>
           </Card>
@@ -101,26 +102,21 @@ export default function InstituteAdminDashboard() {
         </Grid>
       </Grid>
 
-      {/* Purchase Modal */}
-      <Dialog open={isPurchaseModalOpen} onClose={() => setIsPurchaseModalOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Purchase Credits</DialogTitle>
-        <DialogContent dividers>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Number of Credits"
-            type="number"
-            fullWidth
-            variant="outlined"
-            value={purchaseAmount}
-            onChange={(e) => setPurchaseAmount(Number(e.target.value))}
-          />
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setIsPurchaseModalOpen(false)}>Cancel</Button>
-          <Button onClick={handlePurchase} variant="contained" color="primary">Confirm Purchase</Button>
-        </DialogActions>
-      </Dialog>
+      <Box sx={{ mt: 4 }}>
+        <CreditTransactionTable 
+          apiEndpoint="/instituteadmin/wallet/transactions" 
+          hideInstitutionColumn={true} 
+        />
+      </Box>
+
+      <RechargeModal 
+        open={isPurchaseModalOpen} 
+        onClose={() => setIsPurchaseModalOpen(false)} 
+        onSuccess={() => {
+          setIsPurchaseModalOpen(false);
+          fetchData();
+        }} 
+      />
     </Container>
   );
 }

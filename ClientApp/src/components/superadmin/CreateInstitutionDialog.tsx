@@ -72,10 +72,15 @@ const CreateInstitutionDialog: React.FC<CreateProps> = ({ open, onClose }) => {
         
         <TextField margin="dense" fullWidth name="name" label="Name" value={formData.name} onChange={handleChange} required />
         <TextField margin="dense" fullWidth name="code" label="Code" value={formData.code} onChange={handleChange} required />
-        <TextField margin="dense" fullWidth name="type" label="Type (0=School, 1=College)" select value={formData.type} onChange={handleChange}>
+        <TextField margin="dense" fullWidth name="type" label="Type" select value={formData.type} onChange={handleChange}>
           <MenuItem value={0}>School</MenuItem>
           <MenuItem value={1}>College</MenuItem>
           <MenuItem value={2}>University</MenuItem>
+          <MenuItem value={3}>Coaching Institute</MenuItem>
+          <MenuItem value={4}>EdTech</MenuItem>
+          <MenuItem value={5}>Consultancy</MenuItem>
+          <MenuItem value={6}>Advisory</MenuItem>
+          <MenuItem value={7}>Other</MenuItem>
         </TextField>
         <TextField margin="dense" fullWidth name="maxRecruiters" label="Max Recruiters" type="number" value={formData.maxRecruiters} onChange={handleChange} required />
         <TextField margin="dense" fullWidth name="email" label="Email" type="email" value={formData.email} onChange={handleChange} />

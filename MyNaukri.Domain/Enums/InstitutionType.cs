@@ -7,5 +7,7 @@ public enum InstitutionType
     University,
     CoachingInstitute,
     EdTech,
+    Consultancy,
+    Advisory,
     Other
 }

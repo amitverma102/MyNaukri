@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Typography, Grid, Paper, Container, Box, Button } from '@mui/material';
 import api from '../../api/axios';
 import CreateInstitutionDialog from './CreateInstitutionDialog';
+import SuperAdminResumeUploadDialog from './SuperAdminResumeUploadDialog';
 
 interface DashboardStats {
   totalInstitutions: number;
@@ -16,6 +17,7 @@ const SuperAdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
 
   const [openCreate, setOpenCreate] = useState(false);
+  const [openResumeUpload, setOpenResumeUpload] = useState(false);
 
   const fetchStats = async () => {
     try {
@@ -36,9 +38,14 @@ const SuperAdminDashboard: React.FC = () => {
         <Typography variant="h4">
           Super Administrator Dashboard
         </Typography>
-        <Button variant="contained" color="primary" onClick={() => setOpenCreate(true)}>
-          Add Institution
-        </Button>
+        <Box>
+          <Button variant="outlined" color="primary" onClick={() => setOpenResumeUpload(true)} sx={{ mr: 2 }}>
+            Upload Resume
+          </Button>
+          <Button variant="contained" color="primary" onClick={() => setOpenCreate(true)}>
+            Add Institution
+          </Button>
+        </Box>
       </Box>
       
       {stats && (
@@ -85,6 +92,11 @@ const SuperAdminDashboard: React.FC = () => {
       <CreateInstitutionDialog 
         open={openCreate} 
         onClose={() => { setOpenCreate(false); fetchStats(); }} 
+      />
+
+      <SuperAdminResumeUploadDialog
+        open={openResumeUpload}
+        onClose={() => setOpenResumeUpload(false)}
       />
     </Container>
   );

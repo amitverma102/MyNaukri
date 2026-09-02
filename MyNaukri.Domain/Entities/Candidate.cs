@@ -11,6 +11,10 @@ public class Candidate : BaseEntity
     public string ResumeUrl { get; set; } = string.Empty;
     public string ProfilePictureUrl { get; set; } = string.Empty;
     
+    // Resume processing fields
+    public Enums.ProfileSource ProfileSource { get; set; } = Enums.ProfileSource.SELF_REGISTERED;
+    public DateTime? ProfileLastParsedAt { get; set; }
+
     // AI Extracted/Mapped properties
     public string Skills { get; set; } = string.Empty;
     public string Summary { get; set; } = string.Empty;
@@ -32,5 +36,9 @@ public class Candidate : BaseEntity
     public bool ExServiceman { get; set; }
     public Enums.ExServicemanBranch? ExServicemanBranch { get; set; }
     
+    public bool IsSubscribedToJobAlerts { get; set; } = true;
+    
     public ICollection<JobApplication> Applications { get; set; } = new List<JobApplication>();
+    public ICollection<Resume> Resumes { get; set; } = new List<Resume>();
+    public ICollection<CandidateSkill> CandidateSkills { get; set; } = new List<CandidateSkill>();
 }

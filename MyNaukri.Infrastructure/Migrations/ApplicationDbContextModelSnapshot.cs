@@ -111,6 +111,9 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Property<string>("Gender")
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsSubscribedToJobAlerts")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("NoticePeriod")
                         .IsRequired()
                         .HasColumnType("text");
@@ -123,7 +126,14 @@ namespace MyNaukri.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("ProfileLastParsedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("ProfilePictureUrl")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ProfileSource")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -190,6 +200,78 @@ namespace MyNaukri.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("CandidateContactAccesses");
+                });
+
+            modelBuilder.Entity("MyNaukri.Domain.Entities.CandidateSkill", b =>
+                {
+                    b.Property<Guid>("CandidateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SkillId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("CandidateId", "SkillId");
+
+                    b.HasIndex("SkillId");
+
+                    b.ToTable("CandidateSkills");
+                });
+
+            modelBuilder.Entity("MyNaukri.Domain.Entities.CreditBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CreditType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ExpiryDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("InstitutionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("IssuedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("OriginalQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("RecruiterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("RemainingQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("SourceTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstitutionId");
+
+                    b.HasIndex("RecruiterId");
+
+                    b.HasIndex("SourceTransactionId");
+
+                    b.ToTable("CreditBatches");
                 });
 
             modelBuilder.Entity("MyNaukri.Domain.Entities.CreditPriceConfiguration", b =>
@@ -316,8 +398,23 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
+                    b.Property<decimal?>("DiscountAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("DiscountPercentage")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime?>("ExpiryDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("FinalPrice")
+                        .HasColumnType("numeric");
+
                     b.Property<Guid>("InstitutionId")
                         .HasColumnType("uuid");
+
+                    b.Property<decimal?>("PriceBeforeDiscount")
+                        .HasColumnType("numeric");
 
                     b.Property<string>("Reason")
                         .HasColumnType("text");
@@ -347,6 +444,66 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.HasIndex("RecruiterId");
 
                     b.ToTable("CreditTransactions");
+                });
+
+            modelBuilder.Entity("MyNaukri.Domain.Entities.CreditTransactionBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreditBatchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CreditTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreditBatchId");
+
+                    b.HasIndex("CreditTransactionId");
+
+                    b.ToTable("CreditTransactionBatches");
+                });
+
+            modelBuilder.Entity("MyNaukri.Domain.Entities.DeviceToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("DeviceTokens");
                 });
 
             modelBuilder.Entity("MyNaukri.Domain.Entities.InstituteAdminProfile", b =>
@@ -462,6 +619,9 @@ namespace MyNaukri.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("CurrentExpiryDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("InstitutionId")
@@ -626,6 +786,42 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.ToTable("JobApplicationComments");
                 });
 
+            modelBuilder.Entity("MyNaukri.Domain.Entities.RechargePlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("BasePrice")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Credits")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DurationUnit")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DurationValue")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("RechargePlans");
+                });
+
             modelBuilder.Entity("MyNaukri.Domain.Entities.Recruiter", b =>
                 {
                     b.Property<Guid>("Id")
@@ -709,6 +905,70 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.ToTable("RecruiterCreditRates");
                 });
 
+            modelBuilder.Entity("MyNaukri.Domain.Entities.Resume", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CandidateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ParsingStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ParsingVersion")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StoragePath")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StorageProvider")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StoredFileName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UploadedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("UploadedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CandidateId");
+
+                    b.HasIndex("UploadedByUserId");
+
+                    b.ToTable("Resumes");
+                });
+
             modelBuilder.Entity("MyNaukri.Domain.Entities.SavedJob", b =>
                 {
                     b.Property<Guid>("Id")
@@ -736,6 +996,34 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.ToTable("SavedJobs");
                 });
 
+            modelBuilder.Entity("MyNaukri.Domain.Entities.Skill", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("Skills");
+                });
+
             modelBuilder.Entity("MyNaukri.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -751,6 +1039,9 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int>("FailedOtpAttempts")
+                        .HasColumnType("integer");
 
                     b.Property<string>("FirstName")
                         .IsRequired()
@@ -844,6 +1135,49 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Navigation("Recruiter");
                 });
 
+            modelBuilder.Entity("MyNaukri.Domain.Entities.CandidateSkill", b =>
+                {
+                    b.HasOne("MyNaukri.Domain.Entities.Candidate", "Candidate")
+                        .WithMany("CandidateSkills")
+                        .HasForeignKey("CandidateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyNaukri.Domain.Entities.Skill", "Skill")
+                        .WithMany("CandidateSkills")
+                        .HasForeignKey("SkillId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Candidate");
+
+                    b.Navigation("Skill");
+                });
+
+            modelBuilder.Entity("MyNaukri.Domain.Entities.CreditBatch", b =>
+                {
+                    b.HasOne("MyNaukri.Domain.Entities.Institution", "Institution")
+                        .WithMany()
+                        .HasForeignKey("InstitutionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyNaukri.Domain.Entities.Recruiter", "Recruiter")
+                        .WithMany()
+                        .HasForeignKey("RecruiterId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MyNaukri.Domain.Entities.CreditTransaction", "SourceTransaction")
+                        .WithMany()
+                        .HasForeignKey("SourceTransactionId");
+
+                    b.Navigation("Institution");
+
+                    b.Navigation("Recruiter");
+
+                    b.Navigation("SourceTransaction");
+                });
+
             modelBuilder.Entity("MyNaukri.Domain.Entities.CreditPriceConfiguration", b =>
                 {
                     b.HasOne("MyNaukri.Domain.Entities.User", "CreatedBy")
@@ -896,6 +1230,36 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Navigation("Institution");
 
                     b.Navigation("Recruiter");
+                });
+
+            modelBuilder.Entity("MyNaukri.Domain.Entities.CreditTransactionBatch", b =>
+                {
+                    b.HasOne("MyNaukri.Domain.Entities.CreditBatch", "CreditBatch")
+                        .WithMany()
+                        .HasForeignKey("CreditBatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyNaukri.Domain.Entities.CreditTransaction", "CreditTransaction")
+                        .WithMany()
+                        .HasForeignKey("CreditTransactionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreditBatch");
+
+                    b.Navigation("CreditTransaction");
+                });
+
+            modelBuilder.Entity("MyNaukri.Domain.Entities.DeviceToken", b =>
+                {
+                    b.HasOne("MyNaukri.Domain.Entities.User", "User")
+                        .WithMany("DeviceTokens")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("MyNaukri.Domain.Entities.InstituteAdminProfile", b =>
@@ -1015,6 +1379,22 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Navigation("Recruiter");
                 });
 
+            modelBuilder.Entity("MyNaukri.Domain.Entities.Resume", b =>
+                {
+                    b.HasOne("MyNaukri.Domain.Entities.Candidate", "Candidate")
+                        .WithMany("Resumes")
+                        .HasForeignKey("CandidateId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("MyNaukri.Domain.Entities.User", "UploadedByUser")
+                        .WithMany()
+                        .HasForeignKey("UploadedByUserId");
+
+                    b.Navigation("Candidate");
+
+                    b.Navigation("UploadedByUser");
+                });
+
             modelBuilder.Entity("MyNaukri.Domain.Entities.SavedJob", b =>
                 {
                     b.HasOne("MyNaukri.Domain.Entities.Candidate", "Candidate")
@@ -1037,6 +1417,10 @@ namespace MyNaukri.Infrastructure.Migrations
             modelBuilder.Entity("MyNaukri.Domain.Entities.Candidate", b =>
                 {
                     b.Navigation("Applications");
+
+                    b.Navigation("CandidateSkills");
+
+                    b.Navigation("Resumes");
                 });
 
             modelBuilder.Entity("MyNaukri.Domain.Entities.Institution", b =>
@@ -1073,6 +1457,16 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Navigation("CreditTransactions");
 
                     b.Navigation("PostedJobs");
+                });
+
+            modelBuilder.Entity("MyNaukri.Domain.Entities.Skill", b =>
+                {
+                    b.Navigation("CandidateSkills");
+                });
+
+            modelBuilder.Entity("MyNaukri.Domain.Entities.User", b =>
+                {
+                    b.Navigation("DeviceTokens");
                 });
 #pragma warning restore 612, 618
         }

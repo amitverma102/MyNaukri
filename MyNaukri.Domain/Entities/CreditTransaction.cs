@@ -24,4 +24,10 @@ public class CreditTransaction : BaseEntity
     
     public Guid? CreatedByUserId { get; set; }
     public User? CreatedByUser { get; set; }
+
+    public decimal? PriceBeforeDiscount { get; set; }
+    public decimal? DiscountPercentage { get; set; }
+    public decimal? DiscountAmount { get; set; }
+    public decimal? FinalPrice { get; set; }
+    public DateTime? ExpiryDate { get; set; }
 }

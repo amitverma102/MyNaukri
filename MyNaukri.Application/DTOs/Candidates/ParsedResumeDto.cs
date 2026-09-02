@@ -2,6 +2,9 @@ namespace MyNaukri.Application.DTOs.Candidates;
 
 public class ParsedResumeDto
 {
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
     public string Skills { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;
     public int TotalExperienceYears { get; set; }

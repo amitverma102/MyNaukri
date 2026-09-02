@@ -1,4 +1,4 @@
-import { AppBar, Toolbar, Typography, Button, Box } from '@mui/material';
+import { AppBar, Toolbar, Button, Box } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import { Link as RouterLink } from 'react-router-dom';
@@ -38,14 +38,17 @@ export default function NavBar() {
   return (
     <AppBar position="static" color="inherit" elevation={0} sx={{ borderBottom: '1px solid rgba(0, 0, 0, 0.12)', bgcolor: 'white', color: 'text.primary' }}>
       <Toolbar>
-        <Typography 
-          variant="h6" 
+        <Box 
           component={RouterLink} 
           to="/" 
-          sx={{ fontWeight: 'bold', mr: 4, textDecoration: 'none', color: 'primary.main' }}
+          sx={{ display: 'flex', alignItems: 'center', mr: 4, textDecoration: 'none' }}
         >
-          Edu360
-        </Typography>
+          <img 
+            src="/logo.jpg" 
+            alt="EduKey360" 
+            style={{ height: '40px', objectFit: 'contain' }} 
+          />
+        </Box>
         
         {/* Navigation Links */}
         <Box sx={{ flexGrow: 1, display: 'flex', gap: 2 }}>
@@ -77,7 +80,7 @@ export default function NavBar() {
           )}
           {isAuthenticated && isAdmin && (
             <>
-              <Button color="inherit" onClick={() => navigate('/admin/dashboard')}>Dashboard</Button>
+              <Button color="inherit" onClick={() => navigate(role === 'InstituteAdministrator' ? '/instituteadmin/dashboard' : '/admin/dashboard')}>Dashboard</Button>
               <Button color="inherit" onClick={() => navigate('/admin/profile')}>Settings</Button>
             </>
           )}

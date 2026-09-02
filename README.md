@@ -5,7 +5,7 @@ MyNaukri is a modern, scalable, AI-powered web application inspired by Naukri.co
 ## Features
 
 *   **Role-Based Access Control**: Secure authentication using JWT with specialized roles (Candidate, Recruiter, School Administrator, System Admin).
-*   **AI-Powered Features (MVP)**: Automated resume parsing and job recommendations (Architected with Mock services, ready for OpenAI/Gemini integration).
+*   **AI-Powered Features (MVP)**: Automated resume parsing and job recommendations (Architected with Mock services, ready for OpenAI/ integration).
 *   **Advanced Search (MVP)**: Semantic and keyword search for job postings (Architected with Mock services).
 *   **Scalable Architecture**: Built using Clean Architecture and Domain-Driven Design (DDD).
 *   **Cloud Ready**: Full Dockerization for both frontend and backend, with a robust `docker-compose.yml` for local development.

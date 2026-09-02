@@ -19,12 +19,21 @@ public class SuperAdminController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly IInstitutionCreditService _institutionCreditService;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IStorageService _storageService;
+    private readonly IResumeProcessingQueue _resumeQueue;
 
-    public SuperAdminController(ApplicationDbContext context, IInstitutionCreditService institutionCreditService, IPasswordHasher passwordHasher)
+    public SuperAdminController(
+        ApplicationDbContext context, 
+        IInstitutionCreditService institutionCreditService, 
+        IPasswordHasher passwordHasher,
+        IStorageService storageService,
+        IResumeProcessingQueue resumeQueue)
     {
         _context = context;
         _institutionCreditService = institutionCreditService;
         _passwordHasher = passwordHasher;
+        _storageService = storageService;
+        _resumeQueue = resumeQueue;
     }
 
     private Guid GetUserId()
@@ -39,13 +48,16 @@ public class SuperAdminController : ControllerBase
     [HttpGet("dashboard-stats")]
     public async Task<IActionResult> GetDashboardStats()
     {
+        var walletRemaining = await _context.InstitutionCreditWallets.SumAsync(w => (int?)w.AvailableCredits) ?? 0;
+        var recruiterRemaining = await _context.Recruiters.SumAsync(r => (int?)r.Credits) ?? 0;
+
         var stats = new DashboardStatsDto
         {
             TotalInstitutions = await _context.Institutions.CountAsync(),
             ActiveInstitutions = await _context.Institutions.CountAsync(i => i.Status == InstitutionStatus.Active),
             
             TotalCreditsPurchased = await _context.InstitutionCreditWallets.SumAsync(w => (int?)w.TotalPurchasedCredits) ?? 0,
-            TotalCreditsRemaining = await _context.InstitutionCreditWallets.SumAsync(w => (int?)w.AvailableCredits) ?? 0,
+            TotalCreditsRemaining = walletRemaining + recruiterRemaining,
             
             // For TotalCreditsIssued, we count the credits issued by SuperAdmins.
             TotalCreditsIssued = await _context.CreditTransactions
@@ -53,10 +65,101 @@ public class SuperAdminController : ControllerBase
                 .SumAsync(t => (int?)t.Credits) ?? 0
         };
 
-        // TotalCreditsConsumed: For simplicity, it's total purchased + total issued - total remaining.
-        stats.TotalCreditsConsumed = (stats.TotalCreditsPurchased + stats.TotalCreditsIssued) - stats.TotalCreditsRemaining;
+        var consumptionTypes = new[] 
+        {
+            TransactionType.RecruiterResumeDownload,
+            TransactionType.RecruiterContactView,
+            TransactionType.RecruiterBulkDownload,
+            TransactionType.RecruiterNormalJobPosting,
+            TransactionType.RecruiterPlatinumJobPosting,
+            TransactionType.RecruiterCandidateEmail
+        };
+
+        var rawConsumed = await _context.CreditTransactions
+            .Where(t => consumptionTypes.Contains(t.TransactionType))
+            .SumAsync(t => (int?)t.Credits) ?? 0;
+            
+        stats.TotalCreditsConsumed = Math.Abs(rawConsumed);
 
         return Ok(stats);
+    }
+
+    [HttpPost("candidates/upload-resume")]
+    public async Task<IActionResult> UploadResume(IFormFile file)
+    {
+        var currentUserId = GetUserId();
+        if (currentUserId == Guid.Empty) return Unauthorized("Invalid session.");
+
+        if (file == null || file.Length == 0)
+            return BadRequest("No file uploaded.");
+
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (ext != ".pdf" && ext != ".doc" && ext != ".docx")
+            return BadRequest("Only PDF, DOC, and DOCX files are allowed.");
+
+        if (file.Length > 5 * 1024 * 1024)
+            return BadRequest("File size cannot exceed 5MB.");
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+        var fileBytes = ms.ToArray();
+
+        // Save file (using Guid.Empty for candidateId since we don't know it yet)
+        var storagePath = await _storageService.UploadResumeAsync(fileBytes, file.FileName, Guid.Empty);
+
+        var resume = new Resume
+        {
+            OriginalFileName = file.FileName,
+            StoredFileName = Path.GetFileName(storagePath),
+            ContentType = file.ContentType,
+            FileSize = file.Length,
+            StorageProvider = "LocalMock",
+            StoragePath = storagePath,
+            UploadedBy = currentUserId,
+            ParsingStatus = ParsingStatus.UPLOADED,
+            IsPrimary = false
+        };
+
+        _context.Resumes.Add(resume);
+        
+        var audit = new AuditLog
+        {
+            Action = "SUPERADMIN_UPLOAD_RESUME",
+            Details = $"SuperAdmin uploaded resume {file.FileName}",
+            PerformedByUserId = currentUserId,
+            Role = Role.SuperAdministrator
+        };
+        _context.AuditLogs.Add(audit);
+
+        await _context.SaveChangesAsync();
+
+        // Queue for background processing
+        await _resumeQueue.QueueResumeAsync(resume.Id);
+
+        return Ok(new { ResumeId = resume.Id, Status = resume.ParsingStatus.ToString(), Message = "Resume uploaded and queued for processing." });
+    }
+
+    [HttpGet("candidates/resume-upload/{resumeId}/status")]
+    public async Task<IActionResult> GetResumeUploadStatus(Guid resumeId)
+    {
+        var resume = await _context.Resumes
+            .Include(r => r.Candidate)
+            .ThenInclude(c => c.User)
+            .FirstOrDefaultAsync(r => r.Id == resumeId);
+
+        if (resume == null) return NotFound();
+
+        var response = new 
+        {
+            resume.Id,
+            resume.OriginalFileName,
+            Status = resume.ParsingStatus.ToString(),
+            CandidateId = resume.CandidateId,
+            CandidateEmail = resume.Candidate?.User?.Email,
+            CandidateName = resume.Candidate?.User?.FirstName + " " + resume.Candidate?.User?.LastName
+        };
+
+        return Ok(response);
     }
 
     [HttpPost("institutions")]
@@ -142,6 +245,7 @@ public class SuperAdminController : ControllerBase
         
         var query = _context.Institutions
             .Include(i => i.CreditWallet)
+            .Include(i => i.Recruiters)
             .AsNoTracking();
 
         var totalRecords = await query.CountAsync();
@@ -160,7 +264,7 @@ public class SuperAdminController : ControllerBase
                 State = i.State,
                 Status = i.Status,
                 MaxRecruiters = i.MaxRecruiters,
-                CreditBalance = i.CreditWallet != null ? i.CreditWallet.AvailableCredits : 0,
+                CreditBalance = (i.CreditWallet != null ? i.CreditWallet.AvailableCredits : 0) + i.Recruiters.Sum(r => r.Credits),
                 CreatedDate = i.CreatedAt
             })
             .ToListAsync();
@@ -241,6 +345,12 @@ public class SuperAdminController : ControllerBase
 
         if (transactionType.HasValue)
             query = query.Where(t => t.TransactionType == transactionType.Value);
+
+        if (!fromDate.HasValue && !toDate.HasValue)
+        {
+            fromDate = DateTime.UtcNow.AddDays(-7);
+            toDate = DateTime.UtcNow;
+        }
 
         if (fromDate.HasValue)
             query = query.Where(t => t.CreatedAt >= fromDate.Value.ToUniversalTime());

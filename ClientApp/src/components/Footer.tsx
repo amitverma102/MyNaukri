@@ -12,23 +12,25 @@ export default function Footer() {
         <Grid container spacing={4} sx={{ justifyContent: 'space-between' }}>
 
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Typography variant="h6" color="primary" gutterBottom sx={{ fontWeight: 'bold' }}>
-              Edu360
-            </Typography>
+            <img 
+              src="/logo.jpg" 
+              alt="EduKey360" 
+              style={{ height: '40px', objectFit: 'contain', marginBottom: '8px' }} 
+            />
             <Typography variant="body2" color="text.secondary">
               Connect with us
             </Typography>
             <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-              <Link href="https://facebook.com/edu360" target="_blank" color="inherit" aria-label="Follow Edu360 on Facebook">
+              <Link href="https://facebook.com/edu360" target="_blank" color="inherit" aria-label="Follow EduKey360 on Facebook">
                 <FacebookIcon />
               </Link>
-              <Link href="https://instagram.com/edu360" target="_blank" color="inherit" aria-label="Follow Edu360 on Instagram">
+              <Link href="https://instagram.com/edu360" target="_blank" color="inherit" aria-label="Follow EduKey360 on Instagram">
                 <InstagramIcon />
               </Link>
-              <Link href="https://twitter.com/edu360" target="_blank" color="inherit" aria-label="Follow Edu360 on X">
+              <Link href="https://twitter.com/edu360" target="_blank" color="inherit" aria-label="Follow EduKey360 on X">
                 <TwitterIcon />
               </Link>
-              <Link href="https://linkedin.com/company/edu360" target="_blank" color="inherit" aria-label="Follow Edu360 on LinkedIn">
+              <Link href="https://linkedin.com/company/edu360" target="_blank" color="inherit" aria-label="Follow EduKey360 on LinkedIn">
                 <LinkedInIcon />
               </Link>
             </Box>
@@ -69,7 +71,7 @@ export default function Footer() {
         <Typography variant="body2" color="text.secondary" align="center">
           {'© '}
           {new Date().getFullYear()}
-          {' Edu360. All rights reserved.'}
+          {' EduKey360. All rights reserved.'}
         </Typography>
       </Container>
     </Box>

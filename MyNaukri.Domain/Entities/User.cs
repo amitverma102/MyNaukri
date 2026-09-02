@@ -16,9 +16,12 @@ public class User : BaseEntity
     public bool IsEmailVerified { get; set; } = true; // Default true for existing users
     public string? VerificationOtp { get; set; }
     public DateTime? VerificationOtpExpiry { get; set; }
+    public int FailedOtpAttempts { get; set; } = 0;
     
     public string? ResetPasswordOtp { get; set; }
     public DateTime? ResetPasswordExpiry { get; set; }
 
     public Guid? CurrentSessionId { get; set; }
+
+    public ICollection<DeviceToken> DeviceTokens { get; set; } = new List<DeviceToken>();
 }

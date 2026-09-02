@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using MyNaukri.Application.Interfaces;
 using MyNaukri.Infrastructure.Authentication;
 using MyNaukri.Infrastructure.Data;
+using MyNaukri.Infrastructure.Jobs;
 using MyNaukri.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,11 +22,22 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("JwtOpti
 builder.Services.AddScoped<IJwtProvider, JwtProvider>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IAiService, DbAiService>();
-builder.Services.AddScoped<IStorageService, LocalMockStorageService>();
+builder.Services.AddScoped<IResumeParser, GeminiResumeParser>();
+builder.Services.AddSingleton<IResumeProcessingQueue, ResumeProcessingQueue>();
+builder.Services.AddHostedService<ResumeProcessingBackgroundService>();
+builder.Services.AddScoped<IStorageService, AzureBlobStorageService>();
 builder.Services.AddScoped<ISearchService, DbSearchService>();
-builder.Services.AddScoped<INotificationService, MockNotificationService>();
+builder.Services.AddScoped<INotificationService, MyNaukri.Infrastructure.Services.Email.SmtpNotificationService>();
 builder.Services.AddScoped<ICreditService, CreditService>();
 builder.Services.AddScoped<IInstitutionCreditService, InstitutionCreditService>();
+builder.Services.AddScoped<ICreditLedgerService, CreditLedgerService>();
+builder.Services.AddScoped<IRazorpayService, MyNaukri.Infrastructure.Services.Payment.RazorpayService>();
+builder.Services.Configure<MyNaukri.Infrastructure.Services.Payment.RazorpaySettings>(builder.Configuration.GetSection("Razorpay"));
+builder.Services.Configure<MyNaukri.Infrastructure.Services.Email.EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
+builder.Services.Configure<AzureBlobStorageSettings>(builder.Configuration.GetSection("AzureBlobStorage"));
+builder.Services.AddHostedService<ExpireCreditsJob>();
+builder.Services.AddHostedService<DailyJobMatchEmailBackgroundService>();
+builder.Services.AddHostedService<DailyCreditActivityReportBackgroundService>();
 
 // Configure Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

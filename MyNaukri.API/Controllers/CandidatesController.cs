@@ -62,7 +62,8 @@ public class CandidatesController : ControllerBase
                 ClassesTaught = "",
                 BoardsTaught = "",
                 Education = "",
-                Certifications = ""
+                Certifications = "",
+                IsSubscribedToJobAlerts = true
             });
         }
 
@@ -85,7 +86,8 @@ public class CandidatesController : ControllerBase
             ClassesTaught = candidate.ClassesTaught,
             BoardsTaught = candidate.BoardsTaught,
             Education = candidate.Education,
-            Certifications = candidate.Certifications
+            Certifications = candidate.Certifications,
+            IsSubscribedToJobAlerts = candidate.IsSubscribedToJobAlerts
         });
     }
 
@@ -116,7 +118,8 @@ public class CandidatesController : ControllerBase
                 ClassesTaught = request.ClassesTaught ?? "",
                 BoardsTaught = request.BoardsTaught ?? "",
                 Education = request.Education ?? "",
-                Certifications = request.Certifications ?? ""
+                Certifications = request.Certifications ?? "",
+                IsSubscribedToJobAlerts = request.IsSubscribedToJobAlerts ?? true
             };
             _context.Candidates.Add(candidate);
         }
@@ -135,6 +138,10 @@ public class CandidatesController : ControllerBase
             candidate.BoardsTaught = request.BoardsTaught ?? candidate.BoardsTaught;
             candidate.Education = request.Education ?? candidate.Education;
             candidate.Certifications = request.Certifications ?? candidate.Certifications;
+            if (request.IsSubscribedToJobAlerts.HasValue) 
+            {
+                candidate.IsSubscribedToJobAlerts = request.IsSubscribedToJobAlerts.Value;
+            }
         }
 
         await _context.SaveChangesAsync();
@@ -418,5 +425,21 @@ public class CandidatesController : ControllerBase
         }
 
         return Ok(candidates);
+    }
+
+    [HttpGet("unsubscribe/{id}")]
+    [AllowAnonymous]
+    public async Task<ActionResult> Unsubscribe(Guid id)
+    {
+        var candidate = await _context.Candidates.FirstOrDefaultAsync(c => c.Id == id);
+        if (candidate == null)
+        {
+            return Content("<html><body><h2>Candidate not found</h2></body></html>", "text/html");
+        }
+
+        candidate.IsSubscribedToJobAlerts = false;
+        await _context.SaveChangesAsync();
+
+        return Content("<html><body><h2>You have successfully unsubscribed from daily job alerts.</h2><p>You can resubscribe at any time from your profile settings.</p></body></html>", "text/html");
     }
 }

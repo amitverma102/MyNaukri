@@ -9,10 +9,12 @@ namespace MyNaukri.Infrastructure.Services;
 public class InstitutionCreditService : IInstitutionCreditService
 {
     private readonly ApplicationDbContext _context;
+    private readonly ICreditLedgerService _creditLedgerService;
 
-    public InstitutionCreditService(ApplicationDbContext context)
+    public InstitutionCreditService(ApplicationDbContext context, ICreditLedgerService creditLedgerService)
     {
         _context = context;
+        _creditLedgerService = creditLedgerService;
     }
 
     public async Task<InstitutionCreditWallet?> GetWalletAsync(Guid institutionId)
@@ -51,6 +53,7 @@ public class InstitutionCreditService : IInstitutionCreditService
                 TotalAmount = totalAmount,
                 Currency = "INR",
                 PurchasedByUserId = purchasedByUserId,
+                PurchasedBy = await _context.Users.FindAsync(purchasedByUserId),
                 PaymentStatus = PaymentStatus.Successful, // Auto-success for now, simulating real payment later
                 Notes = "Direct Purchase"
             };
@@ -66,25 +69,21 @@ public class InstitutionCreditService : IInstitutionCreditService
                 _context.InstitutionCreditWallets.Add(wallet);
             }
 
-            var balanceBefore = wallet.AvailableCredits;
-            
-            wallet.AvailableCredits += credits;
             wallet.TotalPurchasedCredits += credits;
-            
-            var creditTransaction = new CreditTransaction
-            {
-                InstitutionId = institutionId,
-                TransactionType = TransactionType.InstitutionCreditPurchase,
-                Credits = credits,
-                BalanceBefore = balanceBefore,
-                BalanceAfter = wallet.AvailableCredits,
-                ReferenceType = "Purchase",
-                CreatedByUserId = purchasedByUserId,
-                Description = "Credit Purchase"
-            };
-            
-            _context.CreditTransactions.Add(creditTransaction);
-            
+
+            await _creditLedgerService.IssueCreditsAsync(
+                institutionId: institutionId,
+                recruiterId: null,
+                creditType: CreditType.TopUp,
+                amount: credits,
+                expiryDate: DateTime.UtcNow.AddMonths(12), // default 12 months for purchase unless specified
+                performedByUserId: purchasedByUserId,
+                transactionType: TransactionType.InstitutionCreditPurchase,
+                description: "Credit Purchase",
+                price: pricePerCredit,
+                finalPrice: totalAmount
+            );
+
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
             
@@ -107,61 +106,16 @@ public class InstitutionCreditService : IInstitutionCreditService
 
     public async Task<bool> AllocateToRecruiterAsync(Guid institutionId, Guid recruiterId, int credits, Guid allocatedByUserId, string? reason)
     {
-        if (credits <= 0) throw new ArgumentException("Credits must be positive.", nameof(credits));
-
         using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
-            var wallet = await _context.InstitutionCreditWallets.FirstOrDefaultAsync(w => w.InstitutionId == institutionId);
-            if (wallet == null || wallet.AvailableCredits < credits) return false;
-
-            var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.Id == recruiterId && r.InstitutionId == institutionId);
-            if (recruiter == null) return false;
-
-            // Institution Deduct
-            var instBalanceBefore = wallet.AvailableCredits;
-            wallet.AvailableCredits -= credits;
-            wallet.TotalAllocatedCredits += credits;
-
-            // Recruiter Add
-            var recBalanceBefore = recruiter.Credits;
-            recruiter.Credits += credits;
-
-            // Transactions
-            var instTransaction = new CreditTransaction
+            var success = await _creditLedgerService.TransferToRecruiterAsync(institutionId, recruiterId, credits, allocatedByUserId, reason);
+            if (success)
             {
-                InstitutionId = institutionId,
-                TransactionType = TransactionType.InstitutionToRecruiterAllocation,
-                Credits = -credits,
-                BalanceBefore = instBalanceBefore,
-                BalanceAfter = wallet.AvailableCredits,
-                RecruiterId = null,
-                ReferenceType = "Allocation",
-                ReferenceId = recruiterId.ToString(),
-                CreatedByUserId = allocatedByUserId,
-                Description = reason ?? "Allocated to recruiter"
-            };
-            
-            var recTransaction = new CreditTransaction
-            {
-                InstitutionId = institutionId,
-                RecruiterId = recruiterId,
-                TransactionType = TransactionType.InstitutionToRecruiterAllocation,
-                Credits = credits,
-                BalanceBefore = recBalanceBefore,
-                BalanceAfter = recruiter.Credits,
-                ReferenceType = "Allocation",
-                CreatedByUserId = allocatedByUserId,
-                Description = reason ?? "Received from institution"
-            };
-
-            _context.CreditTransactions.Add(instTransaction);
-            _context.CreditTransactions.Add(recTransaction);
-
-            await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
-            
-            return true;
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            return success;
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -177,60 +131,16 @@ public class InstitutionCreditService : IInstitutionCreditService
 
     public async Task<bool> RevokeFromRecruiterAsync(Guid institutionId, Guid recruiterId, int credits, Guid revokedByUserId, string? reason)
     {
-        if (credits <= 0) throw new ArgumentException("Credits must be positive.", nameof(credits));
-
         using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
-            var wallet = await _context.InstitutionCreditWallets.FirstOrDefaultAsync(w => w.InstitutionId == institutionId);
-            if (wallet == null) return false;
-
-            var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.Id == recruiterId && r.InstitutionId == institutionId);
-            if (recruiter == null || recruiter.Credits < credits) return false;
-
-            // Institution Add
-            var instBalanceBefore = wallet.AvailableCredits;
-            wallet.AvailableCredits += credits;
-
-            // Recruiter Deduct
-            var recBalanceBefore = recruiter.Credits;
-            recruiter.Credits -= credits;
-
-            // Transactions
-            var instTransaction = new CreditTransaction
+            var success = await _creditLedgerService.RevokeFromRecruiterAsync(institutionId, recruiterId, credits, revokedByUserId, reason);
+            if (success)
             {
-                InstitutionId = institutionId,
-                TransactionType = TransactionType.CreditRefund,
-                Credits = credits,
-                BalanceBefore = instBalanceBefore,
-                BalanceAfter = wallet.AvailableCredits,
-                RecruiterId = null,
-                ReferenceType = "Revoke",
-                ReferenceId = recruiterId.ToString(),
-                CreatedByUserId = revokedByUserId,
-                Description = reason ?? "Revoked from recruiter"
-            };
-            
-            var recTransaction = new CreditTransaction
-            {
-                InstitutionId = institutionId,
-                RecruiterId = recruiterId,
-                TransactionType = TransactionType.CreditRefund,
-                Credits = -credits,
-                BalanceBefore = recBalanceBefore,
-                BalanceAfter = recruiter.Credits,
-                ReferenceType = "Revoke",
-                CreatedByUserId = revokedByUserId,
-                Description = reason ?? "Revoked by institution"
-            };
-
-            _context.CreditTransactions.Add(instTransaction);
-            _context.CreditTransactions.Add(recTransaction);
-
-            await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
-            
-            return true;
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            return success;
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -246,59 +156,18 @@ public class InstitutionCreditService : IInstitutionCreditService
 
     public async Task<bool> TransferBetweenRecruitersAsync(Guid institutionId, Guid fromRecruiterId, Guid toRecruiterId, int credits, Guid transferredByUserId, string? reason)
     {
-        if (credits <= 0) throw new ArgumentException("Credits must be positive.", nameof(credits));
         if (fromRecruiterId == toRecruiterId) return false;
 
         using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
-            var fromRecruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.Id == fromRecruiterId && r.InstitutionId == institutionId);
-            var toRecruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.Id == toRecruiterId && r.InstitutionId == institutionId);
-            
-            if (fromRecruiter == null || toRecruiter == null) return false;
-            if (fromRecruiter.Credits < credits) return false;
-
-            var fromBalanceBefore = fromRecruiter.Credits;
-            var toBalanceBefore = toRecruiter.Credits;
-
-            fromRecruiter.Credits -= credits;
-            toRecruiter.Credits += credits;
-
-            var debitTx = new CreditTransaction
+            var success = await _creditLedgerService.TransferBetweenRecruitersAsync(institutionId, fromRecruiterId, toRecruiterId, credits, transferredByUserId, reason);
+            if (success)
             {
-                InstitutionId = institutionId,
-                RecruiterId = fromRecruiterId,
-                TransactionType = TransactionType.RecruiterToRecruiterTransfer,
-                Credits = -credits,
-                BalanceBefore = fromBalanceBefore,
-                BalanceAfter = fromRecruiter.Credits,
-                ReferenceType = "Transfer Out",
-                ReferenceId = toRecruiterId.ToString(),
-                CreatedByUserId = transferredByUserId,
-                Description = reason ?? $"Transferred to {toRecruiter.UserId}"
-            };
-
-            var creditTx = new CreditTransaction
-            {
-                InstitutionId = institutionId,
-                RecruiterId = toRecruiterId,
-                TransactionType = TransactionType.RecruiterToRecruiterTransfer,
-                Credits = credits,
-                BalanceBefore = toBalanceBefore,
-                BalanceAfter = toRecruiter.Credits,
-                ReferenceType = "Transfer In",
-                ReferenceId = fromRecruiterId.ToString(),
-                CreatedByUserId = transferredByUserId,
-                Description = reason ?? $"Received from {fromRecruiter.UserId}"
-            };
-
-            _context.CreditTransactions.Add(debitTx);
-            _context.CreditTransactions.Add(creditTx);
-
-            await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
-
-            return true;
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            return success;
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -326,26 +195,17 @@ public class InstitutionCreditService : IInstitutionCreditService
                 _context.InstitutionCreditWallets.Add(wallet);
             }
 
-            var balanceBefore = wallet.AvailableCredits;
-            
-            wallet.AvailableCredits += credits;
-            
-            // Should we add to TotalPurchasedCredits? No, it's an admin issue. Maybe keep it separate or we just let Available increase.
-            
-            var creditTransaction = new CreditTransaction
-            {
-                InstitutionId = institutionId,
-                TransactionType = TransactionType.InstitutionAdminCredit,
-                Credits = credits,
-                BalanceBefore = balanceBefore,
-                BalanceAfter = wallet.AvailableCredits,
-                ReferenceType = "AdminIssue",
-                CreatedByUserId = addedByUserId,
-                Description = reason
-            };
-            
-            _context.CreditTransactions.Add(creditTransaction);
-            
+            await _creditLedgerService.IssueCreditsAsync(
+                institutionId: institutionId,
+                recruiterId: null,
+                creditType: CreditType.TopUp,
+                amount: credits,
+                expiryDate: DateTime.UtcNow.AddMonths(12),
+                performedByUserId: addedByUserId,
+                transactionType: TransactionType.InstitutionAdminCredit,
+                description: reason
+            );
+
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
             
@@ -378,23 +238,17 @@ public class InstitutionCreditService : IInstitutionCreditService
             }
 
             var balanceBefore = wallet.AvailableCredits;
-            
-            wallet.AvailableCredits += credits;
-            
-            var creditTransaction = new CreditTransaction
-            {
-                InstitutionId = institutionId,
-                TransactionType = TransactionType.SuperAdminCreditAllocation,
-                Credits = credits,
-                BalanceBefore = balanceBefore,
-                BalanceAfter = wallet.AvailableCredits,
-                ReferenceType = "SuperAdminIssue",
-                CreatedByUserId = addedByUserId,
-                Reason = reason,
-                Description = reason
-            };
-            
-            _context.CreditTransactions.Add(creditTransaction);
+
+            var batch = await _creditLedgerService.IssueCreditsAsync(
+                institutionId: institutionId,
+                recruiterId: null,
+                creditType: CreditType.TopUp,
+                amount: credits,
+                expiryDate: DateTime.UtcNow.AddMonths(12),
+                performedByUserId: addedByUserId,
+                transactionType: TransactionType.SuperAdminCreditAllocation,
+                description: reason
+            );
 
             var auditLog = new AuditLog
             {
@@ -406,7 +260,7 @@ public class InstitutionCreditService : IInstitutionCreditService
                 {
                     credits,
                     balanceBefore,
-                    balanceAfter = wallet.AvailableCredits,
+                    balanceAfter = balanceBefore + credits, // approximately
                     reason
                 })
             };
@@ -416,7 +270,7 @@ public class InstitutionCreditService : IInstitutionCreditService
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
             
-            return creditTransaction;
+            return batch?.SourceTransaction;
         }
         catch (DbUpdateConcurrencyException)
         {

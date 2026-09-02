@@ -9,10 +9,12 @@ namespace MyNaukri.Infrastructure.Services;
 public class CreditService : ICreditService
 {
     private readonly ApplicationDbContext _context;
+    private readonly ICreditLedgerService _creditLedgerService;
 
-    public CreditService(ApplicationDbContext context)
+    public CreditService(ApplicationDbContext context, ICreditLedgerService creditLedgerService)
     {
         _context = context;
+        _creditLedgerService = creditLedgerService;
     }
 
     public async Task<int> GetBalanceAsync(Guid recruiterId)
@@ -70,34 +72,14 @@ public class CreditService : ICreditService
             var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.Id == recruiterId);
             if (recruiter == null) return false;
 
-            if (recruiter.Credits < credits)
+            var success = await _creditLedgerService.ConsumeRecruiterCreditsAsync(recruiterId, recruiter.InstitutionId, credits, transactionType, currentUserId ?? Guid.Empty, referenceId, description);
+            
+            if (success)
             {
-                return false; // Insufficient credits
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
             }
-
-            var balanceBefore = recruiter.Credits;
-            recruiter.Credits -= credits;
-            var balanceAfter = recruiter.Credits;
-
-            var creditTransaction = new CreditTransaction
-            {
-                InstitutionId = recruiter.InstitutionId,
-                RecruiterId = recruiterId,
-                TransactionType = transactionType,
-                Credits = credits, // consumption amount
-                BalanceBefore = balanceBefore,
-                BalanceAfter = balanceAfter,
-                ReferenceType = "Recruiter",
-                ReferenceId = referenceId,
-                Description = description,
-                CreatedByUserId = currentUserId
-            };
-
-            _context.CreditTransactions.Add(creditTransaction);
-            await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
-
-            return true;
+            return success;
         }
         catch
         {
@@ -116,25 +98,9 @@ public class CreditService : ICreditService
             var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.Id == recruiterId);
             if (recruiter == null) return false;
 
-            var balanceBefore = recruiter.Credits;
-            recruiter.Credits += credits;
-            var balanceAfter = recruiter.Credits;
+            // Give it a default expiry of 12 months for manual recruiter additions (e.g. refunds)
+            await _creditLedgerService.IssueCreditsAsync(recruiter.InstitutionId, recruiterId, CreditType.TopUp, credits, DateTime.UtcNow.AddMonths(12), currentUserId ?? Guid.Empty, transactionType, description);
 
-            var creditTransaction = new CreditTransaction
-            {
-                InstitutionId = recruiter.InstitutionId,
-                RecruiterId = recruiterId,
-                TransactionType = transactionType,
-                Credits = credits, 
-                BalanceBefore = balanceBefore,
-                BalanceAfter = balanceAfter,
-                ReferenceType = "Recruiter",
-                ReferenceId = referenceId,
-                Description = description,
-                CreatedByUserId = currentUserId
-            };
-
-            _context.CreditTransactions.Add(creditTransaction);
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 

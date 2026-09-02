@@ -16,6 +16,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<JobApplication> JobApplications => Set<JobApplication>();
     public DbSet<SavedJob> SavedJobs => Set<SavedJob>();
     public DbSet<Institution> Institutions => Set<Institution>();
+    public DbSet<Resume> Resumes => Set<Resume>();
+    public DbSet<Skill> Skills => Set<Skill>();
+    public DbSet<CandidateSkill> CandidateSkills => Set<CandidateSkill>();
     
     public DbSet<CreditTransaction> CreditTransactions => Set<CreditTransaction>();
     public DbSet<RecruiterCreditRate> RecruiterCreditRates => Set<RecruiterCreditRate>();
@@ -28,6 +31,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<CreditPurchase> CreditPurchases { get; set; } = null!;
     public DbSet<AuditLog> AuditLogs { get; set; } = null!;
     public DbSet<CreditPriceConfiguration> CreditPriceConfigurations => Set<CreditPriceConfiguration>();
+    public DbSet<CreditBatch> CreditBatches => Set<CreditBatch>();
+    public DbSet<CreditTransactionBatch> CreditTransactionBatches => Set<CreditTransactionBatch>();
+    public DbSet<RechargePlan> RechargePlans => Set<RechargePlan>();
+    public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -64,6 +71,35 @@ public class ApplicationDbContext : DbContext
             .WithMany() // No collection on Candidate for SavedJobs yet, can leave empty
             .HasForeignKey(s => s.CandidateId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Resume>()
+            .HasOne(r => r.Candidate)
+            .WithMany(c => c.Resumes)
+            .HasForeignKey(r => r.CandidateId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Resume>()
+            .Property(r => r.ParsingStatus)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<CandidateSkill>()
+            .HasKey(cs => new { cs.CandidateId, cs.SkillId });
+
+        modelBuilder.Entity<CandidateSkill>()
+            .HasOne(cs => cs.Candidate)
+            .WithMany(c => c.CandidateSkills)
+            .HasForeignKey(cs => cs.CandidateId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<CandidateSkill>()
+            .HasOne(cs => cs.Skill)
+            .WithMany(s => s.CandidateSkills)
+            .HasForeignKey(cs => cs.SkillId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Skill>()
+            .HasIndex(s => s.NormalizedName)
+            .IsUnique();
 
         modelBuilder.Entity<SavedJob>()
             .HasOne(s => s.Job)
@@ -152,6 +188,10 @@ public class ApplicationDbContext : DbContext
             .HasConversion<string>();
             
         modelBuilder.Entity<Candidate>()
+            .Property(c => c.ProfileSource)
+            .HasConversion<string>();
+            
+        modelBuilder.Entity<Candidate>()
             .Property(c => c.ExServicemanBranch)
             .HasConversion<string>();
             
@@ -174,5 +214,35 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<AuditLog>()
             .Property(a => a.Role)
             .HasConversion<string>();
+
+        modelBuilder.Entity<CreditBatch>()
+            .HasOne(cb => cb.Institution)
+            .WithMany()
+            .HasForeignKey(cb => cb.InstitutionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<CreditBatch>()
+            .HasOne(cb => cb.Recruiter)
+            .WithMany()
+            .HasForeignKey(cb => cb.RecruiterId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<CreditTransactionBatch>()
+            .HasOne(ctb => ctb.CreditTransaction)
+            .WithMany()
+            .HasForeignKey(ctb => ctb.CreditTransactionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<CreditTransactionBatch>()
+            .HasOne(ctb => ctb.CreditBatch)
+            .WithMany()
+            .HasForeignKey(ctb => ctb.CreditBatchId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<DeviceToken>()
+            .HasOne(dt => dt.User)
+            .WithMany(u => u.DeviceTokens)
+            .HasForeignKey(dt => dt.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
