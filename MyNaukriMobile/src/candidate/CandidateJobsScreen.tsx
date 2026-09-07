@@ -10,17 +10,27 @@ export const CandidateJobsScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [applyingJobId, setApplyingJobId] = useState<string | null>(null);
+  const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set());
 
   const fetchJobs = useCallback(async (query: string = '') => {
     try {
       if (!refreshing) setLoading(true);
       
-      let fetchedJobs: Job[];
-      if (query.trim() === '') {
-        fetchedJobs = await candidateApi.getAllJobs();
-      } else {
-        fetchedJobs = await candidateApi.searchJobs(query);
-      }
+      const [fetchedJobs, applications] = await Promise.all([
+        query.trim() === '' ? candidateApi.getAllJobs() : candidateApi.searchJobs(query),
+        candidateApi.getMyApplications().catch(() => [])
+      ]);
+
+      const appliedSet = new Set<string>(applications.map((app: any) => app.jobId));
+      
+      // Also include any jobs marked isApplied from backend
+      fetchedJobs.forEach((job: any) => {
+        if (job.isApplied || job.IsApplied) {
+          appliedSet.add(job.id);
+        }
+      });
+
+      setAppliedJobIds(appliedSet);
       setJobs(fetchedJobs);
     } catch (error) {
       console.error('Failed to fetch jobs', error);
@@ -48,54 +58,88 @@ export const CandidateJobsScreen = () => {
     try {
       setApplyingJobId(jobId);
       await candidateApi.applyToJob(jobId);
+
+      // Immediately mark as applied in local state
+      setAppliedJobIds(prev => new Set(prev).add(jobId));
+      setJobs(prevJobs =>
+        prevJobs.map(job =>
+          job.id === jobId ? { ...job, isApplied: true } : job
+        )
+      );
+
       Alert.alert('Success', 'Successfully applied to the job!');
     } catch (error: any) {
       console.error('Failed to apply', error);
       const errorMessage = error.response?.data || error.response?.data?.message || 'Failed to apply. You may have already applied.';
+      
+      // If error indicates already applied, update the button to Applied
+      const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
+      if (errorStr.includes('already applied') || errorStr.includes('already exist')) {
+        setAppliedJobIds(prev => new Set(prev).add(jobId));
+        setJobs(prevJobs =>
+          prevJobs.map(job =>
+            job.id === jobId ? { ...job, isApplied: true } : job
+          )
+        );
+      }
+
       Alert.alert('Apply Failed', typeof errorMessage === 'string' ? errorMessage : 'An error occurred.');
     } finally {
       setApplyingJobId(null);
     }
   };
 
-  const renderJobCard = ({ item }: { item: Job }) => (
-    <View style={[styles.jobCard, item.isPlatinum && styles.platinumCard]}>
-      <View style={styles.jobHeader}>
-        <Text style={styles.jobTitle}>{item.title}</Text>
-        {item.isPlatinum && <MaterialIcons name="stars" size={20} color="#FFD700" />}
-      </View>
-      <Text style={styles.companyName}>{item.companyName}</Text>
-      
-      <View style={styles.jobDetails}>
-        <View style={styles.detailRow}>
-          <MaterialIcons name="location-on" size={16} color="#666" />
-          <Text style={styles.detailText}>{item.location}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <MaterialIcons name="work" size={16} color="#666" />
-          <Text style={styles.detailText}>{item.jobType}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <MaterialIcons name="attach-money" size={16} color="#666" />
-          <Text style={styles.detailText}>₹{item.minSalary} - ₹{item.maxSalary}</Text>
-        </View>
-      </View>
-      
-      <Text style={styles.requirements} numberOfLines={2}>{item.requirements}</Text>
+  const renderJobCard = ({ item }: { item: Job }) => {
+    const isApplied = appliedJobIds.has(item.id) || !!item.isApplied || !!(item as any).IsApplied;
 
-      <TouchableOpacity 
-        style={[styles.applyButton, applyingJobId === item.id && styles.applyingButton]} 
-        onPress={() => handleApply(item.id)}
-        disabled={applyingJobId === item.id}
-      >
-        {applyingJobId === item.id ? (
-          <ActivityIndicator color="#fff" size="small" />
-        ) : (
-          <Text style={styles.applyButtonText}>Apply Now</Text>
-        )}
-      </TouchableOpacity>
-    </View>
-  );
+    return (
+      <View style={[styles.jobCard, item.isPlatinum && styles.platinumCard]}>
+        <View style={styles.jobHeader}>
+          <Text style={styles.jobTitle}>{item.title}</Text>
+          {item.isPlatinum && <MaterialIcons name="stars" size={20} color="#FFD700" />}
+        </View>
+        <Text style={styles.companyName}>{item.companyName}</Text>
+        
+        <View style={styles.jobDetails}>
+          <View style={styles.detailRow}>
+            <MaterialIcons name="location-on" size={16} color="#666" />
+            <Text style={styles.detailText}>{item.location}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <MaterialIcons name="work" size={16} color="#666" />
+            <Text style={styles.detailText}>{item.jobType}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <MaterialIcons name="attach-money" size={16} color="#666" />
+            <Text style={styles.detailText}>₹{item.minSalary} - ₹{item.maxSalary}</Text>
+          </View>
+        </View>
+        
+        <Text style={styles.requirements} numberOfLines={2}>{item.requirements}</Text>
+
+        <TouchableOpacity 
+          style={[
+            styles.applyButton, 
+            isApplied && styles.appliedButton,
+            applyingJobId === item.id && styles.applyingButton
+          ]} 
+          onPress={() => handleApply(item.id)}
+          disabled={applyingJobId === item.id || isApplied}
+        >
+          {applyingJobId === item.id ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : isApplied ? (
+            <View style={styles.appliedButtonContent}>
+              <MaterialIcons name="check-circle" size={18} color="#15803d" style={{ marginRight: 6 }} />
+              <Text style={styles.appliedButtonText}>Applied</Text>
+            </View>
+          ) : (
+            <Text style={styles.applyButtonText}>Apply Now</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -221,6 +265,24 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 6,
     alignItems: 'center',
+  },
+  appliedButton: {
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  appliedButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appliedButtonText: {
+    color: '#15803d',
+    fontSize: 15,
+    fontWeight: '700',
   },
   applyingButton: {
     backgroundColor: '#084d94',

@@ -72,7 +72,8 @@ public class CreditLedgerService : ICreditLedgerService
         }
         else
         {
-            var wallet = await _context.InstitutionCreditWallets.FirstOrDefaultAsync(w => w.InstitutionId == institutionId);
+            var wallet = _context.InstitutionCreditWallets.Local.FirstOrDefault(w => w.InstitutionId == institutionId) 
+                         ?? await _context.InstitutionCreditWallets.FirstOrDefaultAsync(w => w.InstitutionId == institutionId);
             if (wallet != null) currentBalance = wallet.AvailableCredits;
         }
 
@@ -140,7 +141,8 @@ public class CreditLedgerService : ICreditLedgerService
         }
         else
         {
-            var wallet = await _context.InstitutionCreditWallets.FirstOrDefaultAsync(w => w.InstitutionId == institutionId);
+            var wallet = _context.InstitutionCreditWallets.Local.FirstOrDefault(w => w.InstitutionId == institutionId) 
+                         ?? await _context.InstitutionCreditWallets.FirstOrDefaultAsync(w => w.InstitutionId == institutionId);
             if (wallet != null) 
             {
                 currentBalance = wallet.AvailableCredits;
@@ -259,7 +261,8 @@ public class CreditLedgerService : ICreditLedgerService
         }
         else
         {
-            var w = await _context.InstitutionCreditWallets.FirstOrDefaultAsync(w => w.InstitutionId == institutionId);
+            var w = _context.InstitutionCreditWallets.Local.FirstOrDefault(w => w.InstitutionId == institutionId) 
+                    ?? await _context.InstitutionCreditWallets.FirstOrDefaultAsync(w => w.InstitutionId == institutionId);
             if (w != null) { sourceBalance = w.AvailableCredits; w.AvailableCredits -= amount; w.TotalAllocatedCredits += amount; newSourceBalance = w.AvailableCredits; }
         }
 
@@ -285,7 +288,8 @@ public class CreditLedgerService : ICreditLedgerService
         }
         else
         {
-            var w = await _context.InstitutionCreditWallets.FirstOrDefaultAsync(w => w.InstitutionId == institutionId);
+            var w = _context.InstitutionCreditWallets.Local.FirstOrDefault(w => w.InstitutionId == institutionId) 
+                    ?? await _context.InstitutionCreditWallets.FirstOrDefaultAsync(w => w.InstitutionId == institutionId);
             if (w != null) { targetBalance = w.AvailableCredits; w.AvailableCredits += amount; }
         }
 

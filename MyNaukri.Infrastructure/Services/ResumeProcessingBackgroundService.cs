@@ -147,7 +147,8 @@ public class ResumeProcessingBackgroundService : BackgroundService
                 await notificationService.SendEmailAsync(
                     existingUser.Email,
                     "Welcome to EduKey360 - Account Created",
-                    $"Your account has been created by our administrator.\n\nYour username: {existingUser.Email}\nYour temporary password: {rawPassword}\n\nPlease login and change your password."
+                    $"Your account has been created by our administrator.\n\nYour username: {existingUser.Email}\nYour temporary password: {rawPassword}\n\nPlease login and change your password.",
+                    MyNaukri.Domain.Enums.EmailType.Verification
                 );
             }
 

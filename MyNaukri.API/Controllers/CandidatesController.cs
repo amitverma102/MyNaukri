@@ -165,7 +165,8 @@ public class CandidatesController : ControllerBase
                 PhoneNumber = "",
                 Skills = "",
                 Summary = "",
-                TotalExperienceYears = 0
+                TotalExperienceYears = 0,
+                IsSubscribedToJobAlerts = true
             };
             _context.Candidates.Add(candidate);
             // We must save changes to generate the candidate.Id for the storage service

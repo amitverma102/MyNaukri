@@ -1,19 +1,34 @@
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 import { notificationsApi } from '../api/notificationsApi';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+let Notifications: typeof import('expo-notifications') | null = null;
+
+if (!isExpoGo) {
+  try {
+    Notifications = require('expo-notifications');
+    Notifications?.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } catch (e) {
+    console.warn('Notifications handler init error:', e);
+  }
+}
 
 export async function registerForPushNotificationsAsync() {
+  if (isExpoGo || !Notifications) {
+    console.log('Push notifications are skipped in Expo Go');
+    return;
+  }
   let token;
 
   if (Platform.OS === 'android') {

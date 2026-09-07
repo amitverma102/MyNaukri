@@ -1,12 +1,30 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import { candidateApi } from '../api/candidateApi';
 
 export const CandidateResumeScreen = () => {
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
   const [resumeUrl, setResumeUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchCurrentResume();
+  }, []);
+
+  const fetchCurrentResume = async () => {
+    try {
+      const profile = await candidateApi.getProfile();
+      if (profile && (profile.resumeUrl || profile.ResumeUrl)) {
+        setResumeUrl(profile.resumeUrl || profile.ResumeUrl);
+      }
+    } catch (error) {
+      console.log('Failed to fetch profile', error);
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const handleUploadResume = async () => {
     try {
@@ -57,12 +75,16 @@ export const CandidateResumeScreen = () => {
           )}
         </TouchableOpacity>
 
-        {resumeUrl && (
+        {fetching && !resumeUrl ? (
+          <ActivityIndicator style={{ marginTop: 32 }} color="#53c5ab" />
+        ) : resumeUrl ? (
           <View style={styles.successContainer}>
-            <Text style={styles.successTitle}>Current Resume:</Text>
-            <Text style={styles.successLink}>{resumeUrl}</Text>
+            <Text style={styles.successTitle}>Current Resume uploaded!</Text>
+            <TouchableOpacity onPress={() => Linking.openURL(resumeUrl)} style={styles.viewResumeButton}>
+              <Text style={styles.viewResumeText}>View Resume</Text>
+            </TouchableOpacity>
           </View>
-        )}
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -94,15 +116,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#e8f5e9',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#c8e6c9'
+    borderColor: '#c8e6c9',
+    alignItems: 'center'
   },
   successTitle: {
     fontWeight: 'bold',
     color: '#2e7d32',
     marginBottom: 8,
   },
-  successLink: {
-    color: '#2e7d32',
-    fontSize: 12,
+  viewResumeButton: {
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#2e7d32',
+    borderRadius: 6,
+  },
+  viewResumeText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
   }
 });

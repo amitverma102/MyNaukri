@@ -66,7 +66,11 @@ public class AuthController : ControllerBase
 
         if (user.Role == Role.Candidate)
         {
-            var candidate = new Candidate { UserId = user.Id };
+            var candidate = new Candidate 
+            { 
+                UserId = user.Id,
+                IsSubscribedToJobAlerts = true
+            };
             _context.Candidates.Add(candidate);
             await _context.SaveChangesAsync();
         }

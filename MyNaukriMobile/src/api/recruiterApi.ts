@@ -24,4 +24,9 @@ export const recruiterApi = {
   updateApplicationStatus: async (applicationId: string, status: number): Promise<void> => {
     await apiClient.patch(`/JobApplications/${applicationId}/status`, { status });
   },
+
+  getCredits: async (): Promise<{ availableCredits: number }> => {
+    const response = await apiClient.get<{ availableCredits: number }>('/recruiter/credits');
+    return response.data;
+  },
 };

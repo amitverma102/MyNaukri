@@ -45,7 +45,9 @@ public class DailyJobMatchEmailBackgroundService : BackgroundService
         {
             var now = DateTimeOffset.UtcNow;
             var istNow = TimeZoneInfo.ConvertTime(now, _istTimeZone);
-            var nextRun = istNow.Date.AddHours(10); // 10:00 AM IST today
+            
+            // Explicitly set the offset so it is compared correctly regardless of the server's local time zone
+            var nextRun = new DateTimeOffset(istNow.Date.AddHours(10), _istTimeZone.GetUtcOffset(istNow)); // 10:00 AM IST today
 
             if (istNow > nextRun)
             {

@@ -356,7 +356,15 @@ public class InstituteAdminController : ControllerBase
             { "isAnnualRecharge", request.IsAnnualRecharge.ToString() }
         };
 
-        var orderId = await _razorpayService.CreateOrderAsync(finalPrice, receiptId, notes);
+        string orderId;
+        try
+        {
+            orderId = await _razorpayService.CreateOrderAsync(finalPrice, receiptId, notes);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = $"Payment gateway error: {ex.Message}" });
+        }
 
         // Store the pending purchase in the DB so we can verify it later
         var purchase = new CreditPurchase

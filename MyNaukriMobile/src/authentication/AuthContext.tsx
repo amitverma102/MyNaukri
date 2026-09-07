@@ -8,7 +8,7 @@ export interface UserInfo {
   email: string;
   firstName: string;
   lastName: string;
-  role: 'Candidate' | 'Recruiter' | 'InstituteAdministrator' | 'SuperAdministrator';
+  role: 'Candidate' | 'Recruiter' | 'InstituteAdministrator' | 'SuperAdministrator' | string;
 }
 
 interface AuthContextData {

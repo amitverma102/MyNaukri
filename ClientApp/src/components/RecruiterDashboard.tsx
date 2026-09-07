@@ -722,9 +722,9 @@ export default function RecruiterDashboard() {
           <Typography variant="h5" sx={{ fontWeight: 'bold' }}>Credit Balance</Typography>
           <Typography color="textSecondary">Your current available credits for premium features.</Typography>
         </Box>
-        <Box sx={{ bgcolor: 'primary.light', color: 'primary.main', p: 3, borderRadius: 3, textAlign: 'center', minWidth: 150 }}>
-          <Typography variant="h3" sx={{ fontWeight: 'bold' }}>{creditBalance}</Typography>
-          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', textTransform: 'uppercase' }}>Credits</Typography>
+        <Box sx={{ bgcolor: 'primary.light', color: '#ffffff', p: 3, borderRadius: 3, textAlign: 'center', minWidth: 150 }}>
+          <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#ffffff' }}>{creditBalance}</Typography>
+          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#ffffff' }}>Credits</Typography>
         </Box>
       </Box>
 
@@ -799,17 +799,30 @@ export default function RecruiterDashboard() {
                     mb: 1,
                     borderRadius: 2,
                     bgcolor: activeView === item.view ? 'primary.light' : 'transparent',
-                    color: activeView === item.view ? 'primary.main' : 'text.primary',
+                    color: activeView === item.view ? '#ffffff' : 'text.primary',
                     cursor: 'pointer',
                     '&:hover': {
                       bgcolor: activeView === item.view ? 'primary.light' : 'action.hover',
+                    },
+                    '& .MuiListItemIcon-root': {
+                      color: activeView === item.view ? '#ffffff' : 'text.secondary',
                     }
                   }}
                 >
-                  <ListItemIcon sx={{ minWidth: 40, color: activeView === item.view ? 'primary.main' : 'text.secondary' }}>
+                  <ListItemIcon sx={{ minWidth: 40, color: activeView === item.view ? '#ffffff' : 'text.secondary' }}>
                     {item.icon}
                   </ListItemIcon>
-                  <ListItemText primary={<Typography sx={{ fontWeight: activeView === item.view ? 600 : 500, fontSize: '0.95rem' }}>{item.text}</Typography>} />
+                  <ListItemText 
+                    primary={
+                      <Typography sx={{ 
+                        fontWeight: activeView === item.view ? 600 : 500, 
+                        fontSize: '0.95rem',
+                        color: activeView === item.view ? '#ffffff' : 'inherit'
+                      }}>
+                        {item.text}
+                      </Typography>
+                    } 
+                  />
                 </ListItem>
               ))}
             </List>

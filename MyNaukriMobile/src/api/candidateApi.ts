@@ -24,6 +24,7 @@ export interface Job {
   companyName: string;
   isActive: boolean;
   isPlatinum: boolean;
+  isApplied?: boolean;
   createdAt: string;
 }
 
@@ -85,5 +86,23 @@ export const candidateApi = {
     return response.data;
   },
   
-  // Other candidate endpoints (e.g. get profile, get jobs, apply to job) can go here
+  getProfile: async (): Promise<any> => {
+    const response = await apiClient.get('/Candidates/profile');
+    return response.data;
+  },
+
+  getSavedJobs: async (): Promise<any[]> => {
+    const response = await apiClient.get('/SavedJobs');
+    return response.data;
+  },
+
+  toggleSaveJob: async (jobId: string): Promise<any> => {
+    const response = await apiClient.post(`/SavedJobs/${jobId}`);
+    return response.data;
+  },
+
+  getInterviews: async (): Promise<JobApplication[]> => {
+    const response = await apiClient.get<JobApplication[]>('/JobApplications/candidate/interviews');
+    return response.data;
+  }
 };

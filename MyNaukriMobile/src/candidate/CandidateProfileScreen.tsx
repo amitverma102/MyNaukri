@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiClient } from '../api/apiClient';
+import { useAuth } from '../authentication/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 
 export const CandidateProfileScreen = () => {
+  const { signOut } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resumeUploading, setResumeUploading] = useState(false);
@@ -129,18 +132,27 @@ export const CandidateProfileScreen = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.title}>Your Profile</Text>
 
-        <TouchableOpacity 
-          style={[styles.uploadButton, resumeUploading && styles.disabledButton]} 
-          onPress={handleUploadResume}
-          disabled={resumeUploading}
-        >
-          {resumeUploading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Upload Resume</Text>
+        <View style={styles.resumeActions}>
+          <TouchableOpacity 
+            style={[styles.uploadButton, resumeUploading && styles.disabledButton]} 
+            onPress={handleUploadResume}
+            disabled={resumeUploading}
+          >
+            {resumeUploading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Upload Resume</Text>
+            )}
+          </TouchableOpacity>
+          {resumeUrl && (
+            <TouchableOpacity 
+              style={styles.viewButton} 
+              onPress={() => Linking.openURL(resumeUrl)}
+            >
+              <Text style={styles.viewButtonText}>View Resume</Text>
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
-        {resumeUrl && <Text style={styles.linkText}>Resume uploaded successfully</Text>}
+        </View>
 
         <Text style={styles.label}>Summary</Text>
         <TextInput style={[styles.input, styles.multiline]} multiline value={summary} onChangeText={setSummary} />
@@ -192,6 +204,11 @@ export const CandidateProfileScreen = () => {
             <Text style={styles.buttonText}>Save Profile</Text>
           )}
         </TouchableOpacity>
+
+        <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
+          <Ionicons name="log-out-outline" size={20} color="#dc2626" style={{ marginRight: 8 }} />
+          <Text style={styles.logoutButtonText}>Log Out</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -205,9 +222,22 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, color: '#666', marginBottom: 4, marginTop: 12 },
   input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 16, backgroundColor: '#f9f9f9' },
   multiline: { height: 100, textAlignVertical: 'top' },
-  uploadButton: { backgroundColor: '#333', padding: 14, borderRadius: 8, alignItems: 'center', marginBottom: 8 },
+  resumeActions: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  uploadButton: { flex: 1, backgroundColor: '#333', padding: 14, borderRadius: 8, alignItems: 'center' },
+  viewButton: { flex: 1, backgroundColor: '#53c5ab', padding: 14, borderRadius: 8, alignItems: 'center' },
+  viewButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   saveButton: { backgroundColor: '#53c5ab', padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 30 },
   disabledButton: { opacity: 0.7 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  linkText: { color: '#53c5ab', fontSize: 14, textAlign: 'center', marginBottom: 12 }
+  linkText: { color: '#53c5ab', fontSize: 14, textAlign: 'center', marginBottom: 12 },
+  logoutButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fee2e2',
+    padding: 16,
+    borderRadius: 8,
+    marginTop: 14,
+  },
+  logoutButtonText: { color: '#dc2626', fontSize: 16, fontWeight: '600' },
 });

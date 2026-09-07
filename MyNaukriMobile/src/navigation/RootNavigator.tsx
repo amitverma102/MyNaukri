@@ -9,10 +9,12 @@ import { CandidateHomeScreen } from '../candidate/CandidateHomeScreen';
 import { CandidateJobsScreen } from '../candidate/CandidateJobsScreen';
 import { CandidateProfileScreen } from '../candidate/CandidateProfileScreen';
 import { CandidateResumeScreen } from '../candidate/CandidateResumeScreen';
+import { CandidateSavedJobsScreen } from '../candidate/CandidateSavedJobsScreen';
+import { CandidateApplicationsScreen } from '../candidate/CandidateApplicationsScreen';
 import { Ionicons } from '@expo/vector-icons';
 
 const CandidateTab = createBottomTabNavigator();
-const CandidateNavigator = () => (
+const CandidateTabNavigator = () => (
   <CandidateTab.Navigator screenOptions={({ route }) => ({
     headerShown: false,
     tabBarIcon: ({ color, size }) => {
@@ -31,6 +33,15 @@ const CandidateNavigator = () => (
     <CandidateTab.Screen name="Resume" component={CandidateResumeScreen} />
     <CandidateTab.Screen name="Profile" component={CandidateProfileScreen} />
   </CandidateTab.Navigator>
+);
+
+const CandidateStack = createNativeStackNavigator();
+const CandidateNavigator = () => (
+  <CandidateStack.Navigator screenOptions={{ headerShown: false }}>
+    <CandidateStack.Screen name="CandidateTabs" component={CandidateTabNavigator} />
+    <CandidateStack.Screen name="SavedJobs" component={CandidateSavedJobsScreen} />
+    <CandidateStack.Screen name="Applications" component={CandidateApplicationsScreen} />
+  </CandidateStack.Navigator>
 );
 
 import { RecruiterHomeScreen } from '../recruiter/RecruiterHomeScreen';
@@ -58,6 +69,8 @@ const RecruiterNavigator = () => (
 );
 
 import { LoginScreen } from '../authentication/LoginScreen';
+import { AdminHomeScreen } from '../admin/AdminHomeScreen';
+import { UnsupportedRoleScreen } from '../screens/UnsupportedRoleScreen';
 
 const AuthStack = createNativeStackNavigator();
 
@@ -65,6 +78,14 @@ const AuthNavigator = () => (
   <AuthStack.Navigator screenOptions={{ headerShown: false }}>
     <AuthStack.Screen name="Login" component={LoginScreen} />
   </AuthStack.Navigator>
+);
+
+const AdminStack = createNativeStackNavigator();
+
+const AdminNavigator = () => (
+  <AdminStack.Navigator screenOptions={{ headerShown: false }}>
+    <AdminStack.Screen name="AdminHome" component={AdminHomeScreen} />
+  </AdminStack.Navigator>
 );
 
 const Stack = createNativeStackNavigator();
@@ -97,14 +118,13 @@ export const RootNavigator = () => {
           <Stack.Screen name="Candidate" component={CandidateNavigator} />
         ) : userInfo?.role === 'Recruiter' ? (
           <Stack.Screen name="Recruiter" component={RecruiterNavigator} />
+        ) : userInfo?.role === 'SuperAdministrator' || userInfo?.email?.toLowerCase() === 'edutechadmin' ? (
+          <Stack.Screen name="Admin" component={AdminNavigator} />
         ) : (
-          <Stack.Screen name="Unauthorized" component={() => (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-              <Text>Role not supported on mobile</Text>
-            </View>
-          )} />
+          <Stack.Screen name="Unauthorized" component={UnsupportedRoleScreen} />
         )
       )}
     </Stack.Navigator>
   );
 };
+

@@ -2,10 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Alert } from 'react-native';
 import { useAuth } from '../authentication/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { candidateApi, Job, JobApplication } from '../api/candidateApi';
+import { Ionicons } from '@expo/vector-icons';
 
 export const CandidateHomeScreen = () => {
   const { userInfo, signOut } = useAuth();
+  const navigation = useNavigation<NavigationProp<any>>();
   
   const [recommendedJobs, setRecommendedJobs] = useState<Job[]>([]);
   const [applications, setApplications] = useState<JobApplication[]>([]);
@@ -52,6 +55,7 @@ export const CandidateHomeScreen = () => {
         <View style={styles.header}>
           <Text style={styles.greeting}>Hello {userInfo?.firstName || 'Candidate'}</Text>
           <TouchableOpacity onPress={signOut} style={styles.logoutButton}>
+            <Ionicons name="log-out-outline" size={16} color="#dc2626" style={{ marginRight: 4 }} />
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
         </View>
@@ -72,7 +76,7 @@ export const CandidateHomeScreen = () => {
                   <View key={job.id} style={styles.card}>
                     <Text style={styles.jobTitle}>{job.title}</Text>
                     <Text style={styles.schoolName}>{job.companyName}</Text>
-                    <TouchableOpacity style={styles.viewJobButton}>
+                    <TouchableOpacity style={styles.viewJobButton} onPress={() => navigation.navigate('Jobs')}>
                       <Text style={styles.viewJobText}>View Job</Text>
                     </TouchableOpacity>
                   </View>
@@ -81,13 +85,26 @@ export const CandidateHomeScreen = () => {
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Applications</Text>
-              <View style={styles.card}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>Applications & Interviews</Text>
+              </View>
+              <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Applications')}>
                 <Text style={styles.statText}>{activeApplicationsCount} Active Applications</Text>
                 {applications.length > 0 && (
                   <Text style={styles.subText}>Latest: {applications[0].jobTitle} ({applications[0].status})</Text>
                 )}
+                <Text style={styles.viewMoreText}>View All Applications & Interviews &rarr;</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.section}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>Saved Jobs</Text>
               </View>
+              <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('SavedJobs')}>
+                <Text style={styles.statText}>View your saved jobs</Text>
+                <Text style={styles.viewMoreText}>Go to Saved Jobs &rarr;</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.section}>
@@ -127,10 +144,17 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   logoutButton: {
-    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fee2e2',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginRight: 48,
   },
   logoutText: {
-    color: '#e74c3c',
+    color: '#dc2626',
+    fontSize: 13,
     fontWeight: '600',
   },
   section: {
@@ -139,8 +163,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 12,
     color: '#444',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   card: {
     backgroundColor: '#fff',
@@ -201,5 +230,11 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  viewMoreText: {
+    marginTop: 8,
+    color: '#53c5ab',
+    fontWeight: '500',
+    fontSize: 14,
   },
 });

@@ -18,11 +18,14 @@ export const LoginScreen = () => {
 
     setLoading(true);
     try {
-      const response = await authApi.login(email, password);
+      const response = await authApi.login(email.trim(), password);
       // Determine user role and save by decoding the token
       await signIn(response.token);
     } catch (error: any) {
-      const msg = error.response?.data?.Message || 'An error occurred during login.';
+      console.error('Login error:', error?.message, error?.response?.status, error?.response?.data);
+      const msg = typeof error.response?.data === 'string' 
+        ? error.response.data 
+        : error.response?.data?.Message || error.response?.data?.message || error.message || 'An error occurred during login.';
       Alert.alert('Login Failed', msg);
     } finally {
       setLoading(false);

@@ -1,0 +1,9 @@
+**/.git
+**/.vscode
+**/bin
+**/obj
+**/node_modules
+ClientApp/dist
+ClientApp/node_modules
+.DS_Store
+Thumbs.db

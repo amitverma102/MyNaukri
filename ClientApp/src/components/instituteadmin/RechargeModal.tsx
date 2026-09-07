@@ -58,7 +58,7 @@ export default function RechargeModal({ open, onClose, onSuccess }: RechargeModa
         key: key,
         amount: amount * 100, // Amount in paise
         currency: currency,
-        name: 'MyNaukri Credits',
+        name: 'EduKey360',
         description: isAnnualRecharge ? 'Annual Recharge' : 'Credits Top-Up',
         order_id: orderId,
         handler: async function (response: any) {
@@ -93,17 +93,24 @@ export default function RechargeModal({ open, onClose, onSuccess }: RechargeModa
         }
       };
 
+      if (!(window as any).Razorpay) {
+        alert('Razorpay SDK is not loaded. Please disable ad-blockers or check your internet connection.');
+        setLoading(false);
+        return;
+      }
+
       const rzp = new (window as any).Razorpay(options);
       rzp.on('payment.failed', function (response: any) {
         console.error('Payment failed', response.error);
-        alert('Payment failed: ' + response.error.description);
+        alert('Payment failed: ' + (response.error?.description || response.error?.reason || 'Unknown payment failure'));
         setLoading(false);
       });
       
       rzp.open();
     } catch (err: any) {
       console.error(err);
-      alert(err.response?.data?.message || 'Failed to initiate recharge.');
+      const errMsg = err.response?.data?.message || (typeof err.response?.data === 'string' ? err.response?.data : err.message) || 'Failed to initiate recharge.';
+      alert(errMsg);
       setLoading(false);
     }
   };
