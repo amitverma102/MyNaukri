@@ -1035,7 +1035,7 @@ export default function RecruiterDashboard() {
   );
 
   const renderResdexView = () => (
-    <Paper sx={{ borderRadius: 3, boxShadow: '0 4px 20px 0 rgba(0,0,0,0.05)', py: 6, px: 4 }}>
+    <Paper sx={{ borderRadius: 3, boxShadow: '0 4px 20px 0 rgba(0,0,0,0.05)', py: { xs: 3, md: 4 }, px: { xs: 1.5, sm: 2, md: 2.5 } }}>
       <Box sx={{ textAlign: 'center', mb: 6 }}>
         <SearchIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
         <Typography variant="h5" color="textPrimary" gutterBottom sx={{ fontWeight: 'bold' }}>Candidate Search (Resdex)</Typography>
@@ -1135,41 +1135,41 @@ export default function RecruiterDashboard() {
       </Box>
 
       {resdexResults.length > 0 ? (
-        <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #e0e0e0', borderRadius: 2 }}>
-          <Table>
-            <TableHead sx={{ bgcolor: '#f5f5f5' }}>
+        <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #e0e0e0', borderRadius: 2, overflowX: 'hidden' }}>
+          <Table size="small" sx={{ width: '100%', tableLayout: 'fixed', '& .MuiTableCell-root': { px: { xs: 0.75, sm: 1 }, py: 1.25 } }}>
+            <TableHead sx={{ bgcolor: '#f8fafc' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 'bold' }}>Candidate</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>AI Recommendation</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Experience</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Location</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Skills / Teaching & Credentials</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>Action</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', width: '23%', fontSize: '0.82rem' }}>Candidate</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', width: '18%', fontSize: '0.82rem' }}>AI Recommendation</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', width: '10%', fontSize: '0.82rem' }}>Experience</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', width: '15%', fontSize: '0.82rem' }}>Location</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', width: '21%', fontSize: '0.82rem' }}>Skills & Credentials</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold', width: '13%', fontSize: '0.82rem' }}>Action</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {resdexResults.map((candidate) => (
                 <TableRow key={candidate.id} hover>
                   <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
                       <Avatar 
                         src={getMediaUrl(candidate.profilePictureUrl)}
-                        sx={{ bgcolor: 'primary.light', color: 'primary.main' }}
+                        sx={{ bgcolor: 'primary.light', color: 'primary.main', width: 34, height: 34, fontSize: '0.8rem', flexShrink: 0 }}
                       >
                         {candidate.firstName?.[0]}{candidate.lastName?.[0]}
                       </Avatar>
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: '0.82rem', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {candidate.firstName} {candidate.lastName}
                         </Typography>
-                        <Typography variant="body2" color="textSecondary">
+                        <Typography variant="caption" color="textSecondary" sx={{ display: 'block', fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {candidate.email ? candidate.email : '***@***.***'}
                         </Typography>
                         {candidate.updatedAt && (
                           <Tooltip title={`Profile Updated: ${formatDateTime(candidate.updatedAt)}`}>
-                            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mt: 0.5, px: 0.8, py: 0.2, bgcolor: '#f1f5f9', borderRadius: 1, border: '1px solid #e2e8f0' }}>
-                              <AccessTimeIcon sx={{ fontSize: 13, color: '#64748b' }} />
-                              <Typography variant="caption" sx={{ color: '#475569', fontWeight: 500, fontSize: '0.72rem' }}>
+                            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mt: 0.25, px: 0.6, py: 0.1, bgcolor: '#f1f5f9', borderRadius: 1, border: '1px solid #e2e8f0' }}>
+                              <AccessTimeIcon sx={{ fontSize: 11, color: '#64748b' }} />
+                              <Typography variant="caption" sx={{ color: '#475569', fontWeight: 500, fontSize: '0.65rem', whiteSpace: 'nowrap' }}>
                                 Active: {formatRelativeTime(candidate.updatedAt)}
                               </Typography>
                             </Box>
@@ -1180,14 +1180,16 @@ export default function RecruiterDashboard() {
                   </TableCell>
                   <TableCell>
                     {candidate.aiRecommendationScore !== null && candidate.aiRecommendationScore !== undefined ? (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
                         <Tooltip title={candidate.aiRecommendationReason || `AI Compatibility Score: ${Math.round(candidate.aiRecommendationScore)}%`}>
                           <Chip
-                            icon={<AutoAwesomeIcon sx={{ fontSize: '14px !important', color: candidate.aiRecommendationScore >= 80 ? '#15803d !important' : candidate.aiRecommendationScore >= 60 ? '#0284c7 !important' : '#64748b !important' }} />}
+                            icon={<AutoAwesomeIcon sx={{ fontSize: '13px !important', color: candidate.aiRecommendationScore >= 80 ? '#15803d !important' : candidate.aiRecommendationScore >= 60 ? '#0284c7 !important' : '#64748b !important' }} />}
                             label={`${Math.round(candidate.aiRecommendationScore)}% Match`}
                             size="small"
                             sx={{
                               fontWeight: 700,
+                              height: 22,
+                              fontSize: '0.7rem',
                               width: 'fit-content',
                               bgcolor: candidate.aiRecommendationScore >= 80 
                                 ? 'rgba(34, 197, 94, 0.15)' 
@@ -1214,13 +1216,12 @@ export default function RecruiterDashboard() {
                             variant="caption"
                             sx={{
                               color: 'text.secondary',
-                              fontSize: '0.7rem',
+                              fontSize: '0.67rem',
                               display: '-webkit-box',
                               WebkitLineClamp: 2,
                               WebkitBoxOrient: 'vertical',
                               overflow: 'hidden',
-                              maxWidth: 180,
-                              lineHeight: 1.3
+                              lineHeight: 1.2
                             }}
                             title={candidate.aiRecommendationReason}
                           >
@@ -1232,78 +1233,97 @@ export default function RecruiterDashboard() {
                       <Typography variant="caption" color="textSecondary">-</Typography>
                     )}
                   </TableCell>
-                  <TableCell>{candidate.totalExperienceYears} Years</TableCell>
-                  <TableCell>{candidate.currentLocation || 'N/A'}</TableCell>
                   <TableCell>
-                    {candidate.isCtetQualified && (
-                      <Chip label="CTET Certified" size="small" color="success" sx={{ mr: 1, mb: 1, fontWeight: 'bold' }} />
+                    <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      {candidate.totalExperienceYears} Yrs
+                    </Typography>
+                    {candidate.noticePeriod && (
+                      <Typography variant="caption" color="textSecondary" sx={{ display: 'block', fontSize: '0.65rem', whiteSpace: 'nowrap' }}>
+                        {candidate.noticePeriod} notice
+                      </Typography>
                     )}
-                    {candidate.demoVideoUrl && candidate.demoVideoStatus === 'Verified' ? (
-                      <Tooltip title={candidate.demoVideoSummary ? `Lesson: ${candidate.demoVideoSummary}` : 'AI Verified Teaching Demonstration'}>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontSize: '0.8rem', lineHeight: 1.25, wordBreak: 'break-word' }}>
+                      {candidate.currentLocation || 'N/A'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {candidate.isCtetQualified && (
+                        <Chip label="CTET" size="small" color="success" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700 }} />
+                      )}
+                      {candidate.demoVideoUrl && candidate.demoVideoStatus === 'Verified' ? (
+                        <Tooltip title={candidate.demoVideoSummary ? `Lesson: ${candidate.demoVideoSummary}` : 'AI Verified Teaching Demonstration'}>
+                          <Button 
+                            variant="contained" 
+                            size="small" 
+                            href={candidate.demoVideoUrl} 
+                            target="_blank" 
+                            startIcon={<PlayCircleOutlineIcon sx={{ fontSize: '12px !important' }} />}
+                            sx={{ 
+                              textTransform: 'none', 
+                              bgcolor: '#16a34a', color: '#fff',
+                              '&:hover': { bgcolor: '#15803d' },
+                              fontWeight: 600,
+                              fontSize: '0.65rem',
+                              py: 0.1, px: 0.6,
+                              height: 20,
+                              minHeight: 20,
+                              borderRadius: 1
+                            }}
+                          >
+                            Demo {candidate.demoVideoSubject ? `(${candidate.demoVideoSubject})` : ''}
+                          </Button>
+                        </Tooltip>
+                      ) : candidate.demoVideoUrl && candidate.demoVideoStatus !== 'Rejected' ? (
                         <Button 
-                          variant="contained" 
+                          variant="outlined" 
+                          color="primary" 
                           size="small" 
                           href={candidate.demoVideoUrl} 
                           target="_blank" 
-                          startIcon={<PlayCircleOutlineIcon />}
-                          sx={{ 
-                            mr: 1, mb: 1, textTransform: 'none', 
-                            bgcolor: '#16a34a', color: '#fff',
-                            '&:hover': { bgcolor: '#15803d' },
-                            fontWeight: 600
-                          }}
+                          startIcon={<PlayCircleOutlineIcon sx={{ fontSize: '12px !important' }} />}
+                          sx={{ textTransform: 'none', fontSize: '0.65rem', py: 0.1, px: 0.6, height: 20, minHeight: 20, borderRadius: 1 }}
                         >
-                          ✓ Verified Demo {candidate.demoVideoSubject ? `(${candidate.demoVideoSubject})` : ''}
+                          Demo
                         </Button>
-                      </Tooltip>
-                    ) : candidate.demoVideoUrl && candidate.demoVideoStatus !== 'Rejected' ? (
-                      <Button 
-                        variant="outlined" 
-                        color="primary" 
-                        size="small" 
-                        href={candidate.demoVideoUrl} 
-                        target="_blank" 
-                        startIcon={<PlayCircleOutlineIcon />}
-                        sx={{ mr: 1, mb: 1, textTransform: 'none' }}
-                      >
-                        Demo Video
-                      </Button>
-                    ) : null}
-                    {candidate.noticePeriod && (
-                      <Chip label={`Notice: ${candidate.noticePeriod}`} size="small" variant="outlined" sx={{ mr: 1, mb: 1 }} />
-                    )}
-                    {candidate.joiningAvailability && (
-                      <Chip label={candidate.joiningAvailability} size="small" color="info" variant="outlined" sx={{ mr: 1, mb: 1 }} />
-                    )}
-                    {candidate.skills && (
-                      <Tooltip title={candidate.skills}>
-                        <Chip label="Skills" size="small" variant="outlined" sx={{ mr: 1, mb: 1 }} />
-                      </Tooltip>
-                    )}
-                    {candidate.classesTaught && (
-                      <Tooltip title={`Classes: ${candidate.classesTaught}`}>
-                        <Chip label="Classes" size="small" variant="outlined" color="primary" sx={{ mr: 1, mb: 1 }} />
-                      </Tooltip>
-                    )}
-                    {candidate.boardsTaught && (
-                      <Tooltip title={`Boards: ${candidate.boardsTaught}`}>
-                        <Chip label="Boards" size="small" variant="outlined" color="secondary" sx={{ mb: 1 }} />
-                      </Tooltip>
-                    )}
-                    {!candidate.skills && !candidate.classesTaught && !candidate.boardsTaught && !candidate.isCtetQualified && 'N/A'}
+                      ) : null}
+                      {candidate.joiningAvailability && (
+                        <Chip label={candidate.joiningAvailability} size="small" color="info" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />
+                      )}
+                      {candidate.skills && (
+                        <Tooltip title={candidate.skills}>
+                          <Chip label="Skills" size="small" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />
+                        </Tooltip>
+                      )}
+                      {candidate.classesTaught && (
+                        <Tooltip title={`Classes: ${candidate.classesTaught}`}>
+                          <Chip label="Classes" size="small" variant="outlined" color="primary" sx={{ height: 20, fontSize: '0.65rem' }} />
+                        </Tooltip>
+                      )}
+                      {candidate.boardsTaught && (
+                        <Tooltip title={`Boards: ${candidate.boardsTaught}`}>
+                          <Chip label="Boards" size="small" variant="outlined" color="secondary" sx={{ height: 20, fontSize: '0.65rem' }} />
+                        </Tooltip>
+                      )}
+                      {!candidate.skills && !candidate.classesTaught && !candidate.boardsTaught && !candidate.isCtetQualified && (
+                        <Typography variant="caption" color="textSecondary">N/A</Typography>
+                      )}
+                    </Box>
                   </TableCell>
                   <TableCell align="right">
                     {candidate.hasUnlockedContact ? (
-                      <Box sx={{ textAlign: 'left', mb: 2, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
-                        <Typography variant="body2"><b>Email:</b> {candidate.email}</Typography>
-                        <Typography variant="body2"><b>Phone:</b> {candidate.phoneNumber}</Typography>
+                      <Box sx={{ textAlign: 'left', mb: 0.75, p: 0.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+                        <Typography variant="caption" sx={{ display: 'block', fontWeight: 'bold', fontSize: '0.68rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={candidate.email}>{candidate.email}</Typography>
+                        <Typography variant="caption" sx={{ display: 'block', color: 'textSecondary', fontSize: '0.68rem' }}>{candidate.phoneNumber}</Typography>
                       </Box>
                     ) : (
                       <Button 
                         variant="outlined" 
                         size="small" 
                         onClick={() => handleUnlockContact(candidate.id)}
-                        sx={{ mr: 1, mb: 1, display: 'block', width: '100%' }}
+                        sx={{ mb: 0.5, display: 'block', width: '100%', py: 0.25, px: 0.5, fontSize: '0.68rem', textTransform: 'none', fontWeight: 600, minHeight: 24 }}
                       >
                         Unlock Contact
                       </Button>
@@ -1312,11 +1332,11 @@ export default function RecruiterDashboard() {
                       variant="outlined" 
                       color={candidate.hasDownloadedResume ? "success" : "secondary"}
                       size="small" 
-                      startIcon={<DescriptionIcon />}
+                      startIcon={<DescriptionIcon sx={{ fontSize: '12px !important' }} />}
                       onClick={() => handleDownloadResume(candidate)}
-                      sx={{ mb: 1, width: '100%' }}
+                      sx={{ width: '100%', py: 0.25, px: 0.5, fontSize: '0.68rem', textTransform: 'none', fontWeight: 600, minHeight: 24 }}
                     >
-                      {candidate.hasDownloadedResume ? "Download Resume" : "Unlock Resume"}
+                      {candidate.hasDownloadedResume ? "View Resume" : "Unlock Resume"}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -1399,7 +1419,7 @@ export default function RecruiterDashboard() {
       <Box sx={{ display: 'flex', flexWrap: 'wrap', mx: -2 }}>
         
         {/* Sidebar Navigation */}
-        <Box sx={{ width: { xs: '100%', md: '25%', lg: '20%' }, px: 2, mb: { xs: 4, md: 0 } }}>
+        <Box sx={{ width: { xs: '100%', md: '20%', lg: '18%' }, px: 1.5, mb: { xs: 4, md: 0 } }}>
           <Paper elevation={0} sx={{ py: 2, px: 1, borderRadius: 3, border: '1px solid #e0e0e0', position: 'sticky', top: 20 }}>
             <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
@@ -1433,7 +1453,7 @@ export default function RecruiterDashboard() {
                     }
                   }}
                 >
-                  <ListItemIcon sx={{ minWidth: 40, color: activeView === item.view ? '#ffffff' : 'text.secondary' }}>
+                  <ListItemIcon sx={{ minWidth: 36, color: activeView === item.view ? '#ffffff' : 'text.secondary' }}>
                     {item.icon}
                   </ListItemIcon>
                   <ListItemText 
@@ -1441,7 +1461,7 @@ export default function RecruiterDashboard() {
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <Typography sx={{ 
                           fontWeight: activeView === item.view ? 600 : 500, 
-                          fontSize: '0.95rem',
+                          fontSize: '0.9rem',
                           color: activeView === item.view ? '#ffffff' : 'inherit'
                         }}>
                           {item.text}
@@ -1464,7 +1484,7 @@ export default function RecruiterDashboard() {
         </Box>
 
         {/* Main Content Area */}
-        <Box sx={{ width: { xs: '100%', md: '75%', lg: '80%' }, px: 2 }}>
+        <Box sx={{ width: { xs: '100%', md: '80%', lg: '82%' }, px: 1.5 }}>
           
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
             <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
