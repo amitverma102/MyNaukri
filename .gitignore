@@ -8,11 +8,25 @@ obj/
 *.dll
 *.exe
 
-# Node/React
+# Node/React/Mobile
 node_modules/
+**/node_modules/
 dist/
+**/dist/
 build/
+**/build/
 .env
+
+# Mobile
+MyNaukriMobile/node_modules/
+MyNaukriMobile/android/
+MyNaukriMobile/ios/
+.expo/
+**/android/build/
+
+# Scratch & artifacts
+scratch/
+**/scratch/
 
 # OS Files
 .DS_Store

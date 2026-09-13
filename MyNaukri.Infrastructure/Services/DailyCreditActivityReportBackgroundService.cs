@@ -72,7 +72,7 @@ public class DailyCreditActivityReportBackgroundService : BackgroundService
         }
     }
 
-    private async Task ProcessCreditActivityReportsAsync(CancellationToken stoppingToken)
+    public async Task ProcessCreditActivityReportsAsync(CancellationToken stoppingToken = default)
     {
         var istToday = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, _istTimeZone).Date;
         var istYesterday = istToday.AddDays(-1);
@@ -100,55 +100,120 @@ public class DailyCreditActivityReportBackgroundService : BackgroundService
 
             var institutionId = adminProfile.InstitutionId;
 
+            // Only include credits and debits for users (recruiters) in the institute.
+            // Exclude the admin's own central wallet side trade (RecruiterId == null) so that allocation to a recruiter
+            // shows +amount for the recruiter without showing the duplicate -amount on the admin side.
             var transactions = await context.CreditTransactions
-                .Where(t => t.InstitutionId == institutionId && t.CreatedAt >= utcStart && t.CreatedAt < utcEnd)
+                .Include(t => t.Recruiter)
+                    .ThenInclude(r => r!.User)
+                .Where(t => t.InstitutionId == institutionId 
+                            && t.RecruiterId != null 
+                            && (t.Recruiter == null || t.Recruiter.UserId != adminProfile.UserId)
+                            && t.CreatedAt >= utcStart 
+                            && t.CreatedAt < utcEnd)
+                .OrderBy(t => t.CreatedAt)
                 .ToListAsync(stoppingToken);
 
             if (!transactions.Any())
             {
-                continue; // Skip if no activity
+                continue; // Skip if no user credit/debit activity yesterday
             }
 
-            int creditsAdded = transactions.Where(t => t.Credits > 0).Sum(t => t.Credits);
+            int creditsAllocated = transactions.Where(t => t.Credits > 0).Sum(t => t.Credits);
             int creditsConsumed = Math.Abs(transactions.Where(t => t.Credits < 0).Sum(t => t.Credits));
-            int closingBalance = adminProfile.Institution.CreditWallet?.AvailableCredits ?? 0;
+            int availableBalance = adminProfile.Institution.CreditWallet?.AvailableCredits ?? 0;
+            int totalAllocatedToRecruiters = adminProfile.Institution.CreditWallet?.TotalAllocatedCredits ?? 0;
 
             var emailBody = new StringBuilder();
-            emailBody.AppendLine($"<p>Dear {adminProfile.User.FirstName},</p>");
-            emailBody.AppendLine($"<p>Here is the daily credit activity report for <b>{adminProfile.Institution.Name}</b> on {istYesterday:MMM dd, yyyy}:</p>");
-            emailBody.AppendLine("<ul>");
-            emailBody.AppendLine($"<li><b>Credits Added:</b> {creditsAdded}</li>");
-            emailBody.AppendLine($"<li><b>Credits Consumed:</b> {creditsConsumed}</li>");
-            emailBody.AppendLine($"<li><b>Closing Balance:</b> {closingBalance}</li>");
-            emailBody.AppendLine("</ul>");
+            emailBody.AppendLine("<!DOCTYPE html>");
+            emailBody.AppendLine("<html>");
+            emailBody.AppendLine("<head>");
+            emailBody.AppendLine("  <meta charset='utf-8'>");
+            emailBody.AppendLine("  <meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+            emailBody.AppendLine("  <title>Daily Recruiter Credit Activity Report</title>");
+            emailBody.AppendLine("</head>");
+            emailBody.AppendLine("<body style='margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; color: #1e293b;'>");
+            emailBody.AppendLine("  <div style='max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);'>");
             
-            emailBody.AppendLine($"<p>Detailed Activity:</p>");
-            emailBody.AppendLine("<table border='1' cellpadding='5' cellspacing='0' style='border-collapse: collapse;'>");
-            emailBody.AppendLine("<tr><th>Time (IST)</th><th>Transaction Type</th><th>Credits</th><th>Reason / Details</th></tr>");
-            
-            foreach (var tx in transactions.OrderBy(t => t.CreatedAt))
+            // Header
+            emailBody.AppendLine("    <div style='background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%); padding: 24px 32px; color: #ffffff;'>");
+            emailBody.AppendLine("      <div style='font-size: 22px; font-weight: bold; letter-spacing: 0.5px;'>EduKey360</div>");
+            emailBody.AppendLine($"      <div style='font-size: 13px; opacity: 0.9; margin-top: 4px;'>Daily Recruiter Credit Activity Report &bull; {istYesterday:dd-MM-yyyy}</div>");
+            emailBody.AppendLine("    </div>");
+
+            // Content
+            emailBody.AppendLine("    <div style='padding: 28px 32px;'>");
+            emailBody.AppendLine($"      <p style='font-size: 15px; margin: 0 0 12px 0;'>Dear <strong>{adminProfile.User.FirstName}</strong>,</p>");
+            emailBody.AppendLine($"      <p style='font-size: 14px; color: #475569; line-height: 1.6; margin: 0 0 20px 0;'>Here is the daily credit and debit activity for all recruiters and staff members at <strong>{adminProfile.Institution.Name}</strong> for <strong>{istYesterday:dd-MM-yyyy}</strong>:</p>");
+
+            // Summary Card
+            emailBody.AppendLine("      <div style='background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px;'>");
+            emailBody.AppendLine("        <table style='width: 100%; border-collapse: collapse; font-size: 13px;'>");
+            emailBody.AppendLine($"         <tr><td style='padding: 4px 0; color: #64748b;'>Credits Allocated to Recruiters:</td><td style='padding: 4px 0; font-weight: bold; color: #166534; text-align: right;'>+{creditsAllocated}</td></tr>");
+            emailBody.AppendLine($"         <tr><td style='padding: 4px 0; color: #64748b;'>Credits Debited / Consumed:</td><td style='padding: 4px 0; font-weight: bold; color: #991b1b; text-align: right;'>-{creditsConsumed}</td></tr>");
+            emailBody.AppendLine($"         <tr style='border-top: 1px solid #e2e8f0;'><td style='padding: 6px 0 2px 0; color: #64748b;'>Institution Wallet (Unallocated):</td><td style='padding: 6px 0 2px 0; font-weight: bold; color: #0f766e; text-align: right;'>{availableBalance} credits</td></tr>");
+            emailBody.AppendLine($"         <tr><td style='padding: 2px 0; color: #64748b;'>Total Active Recruiter Balances:</td><td style='padding: 2px 0; font-weight: bold; color: #1e293b; text-align: right;'>{totalAllocatedToRecruiters} credits</td></tr>");
+            emailBody.AppendLine("        </table>");
+            emailBody.AppendLine("      </div>");
+
+            // Activity Table
+            emailBody.AppendLine("      <div style='font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #334155; margin-bottom: 10px;'>Recruiter Transactions</div>");
+            emailBody.AppendLine("      <table style='width: 100%; border-collapse: collapse; font-size: 13px;'>");
+            emailBody.AppendLine("        <thead>");
+            emailBody.AppendLine("          <tr style='background-color: #f1f5f9; text-align: left;'>");
+            emailBody.AppendLine("            <th style='padding: 8px 10px; border-bottom: 2px solid #cbd5e1; color: #475569;'>Time (IST)</th>");
+            emailBody.AppendLine("            <th style='padding: 8px 10px; border-bottom: 2px solid #cbd5e1; color: #475569;'>User / Recruiter</th>");
+            emailBody.AppendLine("            <th style='padding: 8px 10px; border-bottom: 2px solid #cbd5e1; color: #475569;'>Transaction</th>");
+            emailBody.AppendLine("            <th style='padding: 8px 10px; border-bottom: 2px solid #cbd5e1; color: #475569; text-align: right;'>Credits</th>");
+            emailBody.AppendLine("            <th style='padding: 8px 10px; border-bottom: 2px solid #cbd5e1; color: #475569;'>Details</th>");
+            emailBody.AppendLine("          </tr>");
+            emailBody.AppendLine("        </thead>");
+            emailBody.AppendLine("        <tbody>");
+
+            foreach (var tx in transactions)
             {
                 var txIstTime = TimeZoneInfo.ConvertTimeFromUtc(tx.CreatedAt, _istTimeZone);
                 var amountFormatted = tx.Credits > 0 ? $"+{tx.Credits}" : tx.Credits.ToString();
-                var color = tx.Credits > 0 ? "green" : "red";
+                var badgeBg = tx.Credits > 0 ? "#dcfce7" : "#fee2e2";
+                var badgeColor = tx.Credits > 0 ? "#166534" : "#991b1b";
                 var details = string.IsNullOrWhiteSpace(tx.Reason) ? tx.Description : tx.Reason;
-                
-                emailBody.AppendLine($"<tr>");
-                emailBody.AppendLine($"<td>{txIstTime:HH:mm}</td>");
-                emailBody.AppendLine($"<td>{tx.TransactionType}</td>");
-                emailBody.AppendLine($"<td style='color: {color};'>{amountFormatted}</td>");
-                emailBody.AppendLine($"<td>{details ?? "-"}</td>");
-                emailBody.AppendLine($"</tr>");
-            }
-            emailBody.AppendLine("</table>");
+                var recruiterName = tx.Recruiter?.User != null 
+                    ? $"{tx.Recruiter.User.FirstName} {tx.Recruiter.User.LastName}".Trim() 
+                    : "Recruiter";
 
-            emailBody.AppendLine($"<br><p>Best regards,<br>Team Edukey360</p>");
+                emailBody.AppendLine("          <tr style='border-bottom: 1px solid #e2e8f0;'>");
+                emailBody.AppendLine($"            <td style='padding: 10px; color: #64748b; white-space: nowrap;'>{txIstTime:hh:mm tt} IST</td>");
+                emailBody.AppendLine($"            <td style='padding: 10px; font-weight: 600; color: #1e293b;'>{recruiterName}</td>");
+                emailBody.AppendLine($"            <td style='padding: 10px; color: #475569;'>{tx.TransactionType}</td>");
+                emailBody.AppendLine($"            <td style='padding: 10px; text-align: right;'><span style='display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 700; background-color: {badgeBg}; color: {badgeColor};'>{amountFormatted}</span></td>");
+                emailBody.AppendLine($"            <td style='padding: 10px; color: #64748b; font-size: 12px;'>{details ?? "-"}</td>");
+                emailBody.AppendLine("          </tr>");
+            }
+
+            emailBody.AppendLine("        </tbody>");
+            emailBody.AppendLine("      </table>");
+
+            // Portal Link
+            emailBody.AppendLine("      <div style='margin-top: 28px; text-align: center;'>");
+            emailBody.AppendLine("        <a href='https://mynaukri-frontend.greendune-87ffa7a1.centralus.azurecontainerapps.io/instituteadmin/recruiters' style='display: inline-block; padding: 10px 22px; background-color: #0f766e; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 13px; border-radius: 6px;'>View Recruiter Audits on Dashboard</a>");
+            emailBody.AppendLine("      </div>");
+            emailBody.AppendLine("    </div>");
+
+            // Footer
+            emailBody.AppendLine("    <div style='background-color: #f8fafc; padding: 18px 32px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b; text-align: center; line-height: 1.6;'>");
+            emailBody.AppendLine($"      This daily report was automatically compiled by EduKey360 for {adminProfile.Institution.Name}.<br>");
+            emailBody.AppendLine("      For support or queries, contact us at <a href='mailto:support@edukey360.com' style='color: #0f766e; text-decoration: underline;'>support@edukey360.com</a>.<br>");
+            emailBody.AppendLine("      <a href='https://www.edukey360.com' style='color: #64748b; text-decoration: none;'>www.edukey360.com</a>");
+            emailBody.AppendLine("    </div>");
+            emailBody.AppendLine("  </div>");
+            emailBody.AppendLine("</body>");
+            emailBody.AppendLine("</html>");
 
             await notificationService.SendEmailAsync(
                 adminProfile.User.Email,
-                $"Daily Credit Activity Report - {istYesterday:MMM dd, yyyy}",
+                $"EduKey360: Daily Recruiter Credit Activity Report - {istYesterday:dd-MM-yyyy}",
                 emailBody.ToString(),
-                emailType: MyNaukri.Domain.Enums.EmailType.JobAlert
+                emailType: MyNaukri.Domain.Enums.EmailType.Default
             );
             
             _logger.LogInformation("Sent daily credit activity report to {Email} for Institution {InstitutionId}", adminProfile.User.Email, institutionId);

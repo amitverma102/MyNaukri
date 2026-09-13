@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EduKey360 - Enterprise Product Showcase & Video Experience</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0f766e;
+      --primary-light: #14b8a6;
+      --primary-dark: #115e59;
+      --accent: #f59e0b;
+      --bg: #090d16;
+      --surface: #111827;
+      --surface-elevated: #1f2937;
+      --border: #374151;
+      --text: #f9fafb;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --font: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--primary-light), var(--primary-dark));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 20px;
+      color: white;
+      box-shadow: 0 4px 14px rgba(20, 184, 166, 0.4);
+    }
+    .brand-name {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(to right, #fff, #99f6e4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .brand-tag {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      background: rgba(20, 184, 166, 0.15);
+      color: var(--primary-light);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(20, 184, 166, 0.3);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .btn {
+      padding: 9px 18px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary-light), var(--primary));
+      color: white;
+      box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3);
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(20, 184, 166, 0.45);
+    }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-outline:hover {
+      background: var(--surface-elevated);
+      border-color: var(--text-muted);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 1440px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px;
+      gap: 24px;
+    }
+
+    /* Video Player Mockup Container */
+    .player-section {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 1024px) {
+      .player-section { grid-template-columns: 1fr; }
+    }
+
+    .video-viewport {
+      background: #000;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .video-stage {
+      height: 540px;
+      position: relative;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 30%, #1e293b, #090d16);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Animated Scene Canvas */
+    .scene-content {
+      width: 100%;
+      height: 100%;
+      padding: 36px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      animation: fadeIn 0.4s ease-out;
+      position: relative;
+      z-index: 2;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .scene-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .scene-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      background: rgba(20, 184, 166, 0.18);
+      color: #5eead4;
+      border: 1px solid rgba(94, 234, 212, 0.4);
+    }
+    .device-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.06);
+      padding: 4px 10px;
+      border-radius: 12px;
+    }
+
+    .scene-body {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 24px;
+      align-items: center;
+      margin: auto 0;
+    }
+
+    .scene-text h2 {
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .scene-text p {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #94a3b8;
+      margin-bottom: 16px;
+    }
+
+    .feature-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .pill {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      background: var(--surface-elevated);
+      color: #e2e8f0;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Screen Mockup */
+    .mockup-window {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 320px;
+    }
+    .mockup-bar {
+      background: #1f2937;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .circle { width: 10px; height: 10px; border-radius: 50%; }
+    .c-red { background: #ef4444; }
+    .c-yellow { background: #f59e0b; }
+    .c-green { background: #10b981; }
+    .mockup-url {
+      background: #111827;
+      border-radius: 6px;
+      padding: 3px 12px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #9ca3af;
+      margin-left: 8px;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mockup-viewport {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      background: #0f172a;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Mobile Phone Mockup */
+    .mobile-frame {
+      width: 220px;
+      height: 320px;
+      border: 8px solid #334155;
+      border-radius: 32px;
+      margin: 0 auto;
+      background: #0f172a;
+      overflow: hidden;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .mobile-notch {
+      width: 80px;
+      height: 14px;
+      background: #334155;
+      border-radius: 0 0 10px 10px;
+      margin: 0 auto;
+    }
+    .mobile-screen {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      font-size: 11px;
+    }
+
+    /* Interactive Player Controller */
+    .player-controls {
+      background: #111827;
+      border-top: 1px solid var(--border);
+      padding: 14px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .progress-bar-container {
+      width: 100%;
+      height: 6px;
+      background: #374151;
+      border-radius: 3px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(to right, var(--primary-light), var(--accent));
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+
+    .control-buttons-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .left-controls, .right-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .ctrl-btn {
+      background: transparent;
+      border: none;
+      color: #e5e7eb;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 6px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+    .ctrl-btn:hover { background: #374151; }
+    .play-btn-main {
+      width: 38px;
+      height: 38px;
+      background: var(--primary-light);
+      border-radius: 50%;
+      color: #000;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(20, 184, 166, 0.4);
+    }
+    .play-btn-main:hover {
+      background: #2dd4bf;
+      transform: scale(1.05);
+    }
+
+    .time-indicator {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Subtitle & Narration Bar */
+    .narration-bar {
+      background: rgba(15, 23, 42, 0.95);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .voiceover-icon {
+      font-size: 18px;
+      color: var(--primary-light);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.6; transform: scale(0.95); }
+      50% { opacity: 1; transform: scale(1.05); }
+    }
+    .narration-text {
+      font-size: 13px;
+      color: #e2e8f0;
+      font-style: italic;
+      line-height: 1.4;
+      flex: 1;
+    }
+    .speech-toggle {
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--border);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    /* Sidebar - Scene Directory & Role Filter */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .scene-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 480px;
+      overflow-y: auto;
+    }
+
+    .scene-item {
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .scene-item:hover {
+      background: var(--surface-elevated);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+    .scene-item.active {
+      background: rgba(20, 184, 166, 0.15);
+      border-color: var(--primary-light);
+    }
+    .scene-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+    .scene-item.active .scene-num { color: var(--primary-light); }
+    .scene-info { flex: 1; }
+    .scene-info-title { font-size: 13px; font-weight: 600; color: #f3f4f6; }
+    .scene-info-desc { font-size: 11px; color: var(--text-muted); }
+    .scene-role-tag {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+    }
+
+    /* Role Highlights Grid */
+    .role-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+    }
+
+    .role-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .role-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--primary-light);
+    }
+
+    .role-card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .role-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .ri-candidate { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+    .ri-recruiter { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .ri-admin { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .ri-superadmin { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+
+    .role-card h3 { font-size: 16px; font-weight: 700; color: #fff; }
+    .role-card p { font-size: 13px; color: #94a3b8; line-height: 1.5; margin-bottom: 12px; }
+
+    .role-bullets {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .role-bullets li {
+      font-size: 12px;
+      color: #cbd5e1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .role-bullets li::before {
+      content: "✓";
+      color: var(--primary-light);
+      font-weight: bold;
+    }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 20px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-dim);
+      background: var(--surface);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">E</div>
+      <div>
+        <div class="brand-name">EduKey360</div>
+        <div style="font-size: 11px; color: var(--text-muted);">Enterprise Product Video Showcase</div>
+      </div>
+      <span class="brand-tag">Production Live</span>
+    </div>
+    <div class="header-actions">
+      <a href="edukey360_product_showcase.mp4" download="edukey360_product_showcase.mp4" class="btn btn-outline" style="border-color: #14b8a6; color: #5eead4;">⬇ Download MP4 Video (1.7 MB)</a>
+      <a href="https://edukey360.com" target="_blank" class="btn btn-outline">Visit Web Portal</a>
+      <button class="btn btn-primary" onclick="restartVideo()">▶ Play Interactive Tour</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Video Mode Selector -->
+    <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between;">
+      <div style="display: flex; gap: 10px; background: #1f2937; padding: 4px; border-radius: 10px; border: 1px solid var(--border);">
+        <button id="tabMp4" onclick="switchMode('mp4')" style="padding: 8px 18px; border-radius: 8px; border: none; font-size: 13px; font-weight: 700; cursor: pointer; background: var(--primary-light); color: #000;">
+          🎬 Master 1080p MP4 Video
+        </button>
+        <button id="tabInteractive" onclick="switchMode('interactive')" style="padding: 8px 18px; border-radius: 8px; border: none; font-size: 13px; font-weight: 700; cursor: pointer; background: transparent; color: var(--text-muted);">
+          ⚡ Interactive Scene Tour
+        </button>
+      </div>
+      <div style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+        <span style="background: rgba(236, 72, 153, 0.2); color: #f472b6; padding: 2px 8px; border-radius: 12px; font-weight: 700; border: 1px solid rgba(236, 72, 153, 0.3);">🎙️ Indian Female Voice (Neerja)</span>
+        <span>1920x1080 Full HD • Real Web & Mobile Screenshots • H.264</span>
+      </div>
+    </div>
+
+    <!-- MP4 Native Player Container -->
+    <div id="mp4PlayerContainer" style="background: #000; border-radius: var(--radius-lg); border: 1px solid var(--border); overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.6);">
+      <video id="nativeMp4" controls preload="metadata" style="width: 100%; aspect-ratio: 16/9; display: block; background: #000;" src="edukey360_product_showcase.mp4">
+        Your browser does not support the video tag.
+      </video>
+      <div style="padding: 14px 20px; background: #111827; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border);">
+        <div>
+          <span style="font-weight: 700; color: #fff; font-size: 14px;">EduKey360 Official Master Product Showcase (Upgraded)</span>
+          <span style="font-size: 12px; color: var(--text-muted); margin-left: 10px;">Indian Female Voiceover • Real Live Web & Native Mobile Screenshots</span>
+        </div>
+        <a href="edukey360_product_showcase.mp4" download="edukey360_product_showcase.mp4" class="btn btn-primary" style="font-size: 12px; padding: 6px 14px;">
+          ⬇ Download MP4 Video (2.85 MB)
+        </a>
+      </div>
+    </div>
+
+    <div class="player-section" id="interactivePlayerSection" style="display: none;">
+      <!-- Main Video Simulation Stage -->
+      <div class="video-viewport">
+        <div class="video-stage" id="videoStage">
+          <!-- Dynamic Scene Content Injected by JS -->
+          <div class="scene-content" id="sceneContent">
+            <!-- Scene elements render here -->
+          </div>
+        </div>
+
+        <!-- Live Subtitle / Voiceover Narration Bar -->
+        <div class="narration-bar">
+          <span class="voiceover-icon">🎙️</span>
+          <div class="narration-text" id="narrationText">
+            "Welcome to EduKey360 — India's premier educational recruitment ecosystem, connecting educators and academic institutions."
+          </div>
+          <button class="speech-toggle" id="speechToggle" onclick="toggleSpeech()">🔊 Voice: ON</button>
+        </div>
+
+        <!-- Video Player Controls -->
+        <div class="player-controls">
+          <div class="progress-bar-container" onclick="seekVideo(event)">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <div class="control-buttons-row">
+            <div class="left-controls">
+              <button class="ctrl-btn play-btn-main" id="playBtn" onclick="togglePlay()">▶</button>
+              <button class="ctrl-btn" onclick="prevScene()">⏮</button>
+              <button class="ctrl-btn" onclick="nextScene()">⏭</button>
+              <span class="time-indicator" id="timeIndicator">0:00 / 3:00</span>
+            </div>
+            <div class="right-controls">
+              <span style="font-size: 12px; color: var(--text-muted);" id="sceneIndexTag">Scene 1 of 6</span>
+              <button class="ctrl-btn" onclick="toggleSpeed()" id="speedBtn" style="font-size: 12px; font-weight: 600;">1.0x</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Sidebar: Scene Directory -->
+      <div class="sidebar">
+        <div class="card">
+          <div class="card-title">
+            <span>Video Scenes</span>
+            <span style="font-size: 11px; color: var(--primary-light);" id="totalDurationLabel">6 Scenes • 3m 00s</span>
+          </div>
+          <div class="scene-list" id="sceneList">
+            <!-- Generated items -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Role Matrix Section -->
+    <div style="margin-top: 10px;">
+      <h2 style="font-size: 22px; font-weight: 800; margin-bottom: 6px;">Multi-Interface & Role Architecture</h2>
+      <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px;">
+        EduKey360 delivers tailored workflows for every participant in the educational ecosystem across Desktop Web and Native Mobile applications.
+      </p>
+
+      <div class="role-grid">
+        <!-- Candidate -->
+        <div class="role-card">
+          <div class="role-card-header">
+            <div class="role-icon ri-candidate">🎓</div>
+            <div>
+              <h3>Candidate</h3>
+              <span style="font-size: 11px; color: #60a5fa;">Web & Mobile (iOS / Android)</span>
+            </div>
+          </div>
+          <p>Verified teacher discovery, multimedia portfolio, and instant interview scheduling.</p>
+          <ul class="role-bullets">
+            <li>CTET / State TET Verified Badging</li>
+            <li>Teaching Demo Video (YouTube / Drive)</li>
+            <li>Faceted Search: Work Mode, Board, Date</li>
+            <li>Pre-screening questionnaire before apply</li>
+            <li>Direct .ics Calendar Export & Push Alerts</li>
+            <li>Self-Serve DPDP Account Deletion</li>
+          </ul>
+        </div>
+
+        <!-- Recruiter -->
+        <div class="role-card">
+          <div class="role-card-header">
+            <div class="role-icon ri-recruiter">👔</div>
+            <div>
+              <h3>Recruiter</h3>
+              <span style="font-size: 11px; color: #34d399;">Web & Mobile ATS</span>
+            </div>
+          </div>
+          <p>Streamlined talent acquisition with Resdex candidate search and collaborative review.</p>
+          <ul class="role-bullets">
+            <li>Resdex Candidate Search with Filters</li>
+            <li>Contact & Resume Unlock with Credits</li>
+            <li>Collaborative ATS Notes & Timeline</li>
+            <li>In-App Interview Scheduler</li>
+            <li>Real-time Push & Email Notifications</li>
+            <li>Single-Session Recruiter Concurrency</li>
+          </ul>
+        </div>
+
+        <!-- Institute Administrator -->
+        <div class="role-card">
+          <div class="role-card-header">
+            <div class="role-icon ri-admin">🏫</div>
+            <div>
+              <h3>Institute Administrator</h3>
+              <span style="font-size: 11px; color: #fbbf24;">Web Management Console</span>
+            </div>
+          </div>
+          <p>Complete control over institutional branding, recruiter licenses, and credit wallets.</p>
+          <ul class="role-bullets">
+            <li>Prepaid Credit Wallet with Razorpay</li>
+            <li>Granular Recruiter Credit Allocation</li>
+            <li>Credit Revoke & Inter-recruiter Transfers</li>
+            <li>Verified Institution Showcase Page</li>
+            <li>Detailed Credit Consumption Audits</li>
+          </ul>
+        </div>
+
+        <!-- SuperAdmin -->
+        <div class="role-card">
+          <div class="role-card-header">
+            <div class="role-icon ri-superadmin">🛡️</div>
+            <div>
+              <h3>SuperAdmin</h3>
+              <span style="font-size: 11px; color: #c084fc;">Platform Governance</span>
+            </div>
+          </div>
+          <p>Platform-wide oversight, financial reconciliation, and institution verification.</p>
+          <ul class="role-bullets">
+            <li>Multi-Institution Onboarding & Approval</li>
+            <li>Global Financial Credit Ledger</li>
+            <li>Dynamic Credit Pricing Tiers & Discounts</li>
+            <li>System-wide Audit Logging & Security</li>
+            <li>Direct SuperAdmin Credit Injections</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    EduKey360 Enterprise Recruitment Platform • Deployed on Microsoft Azure • DPDP Act 2023 & GDPR Compliant • Razorpay Test Mode
+  </footer>
+
+  <script>
+    const scenes = [
+      {
+        id: 1,
+        title: "Introduction & Vision",
+        duration: 25,
+        role: "Overview",
+        device: "Web & Mobile",
+        badge: "EduKey360 Ecosystem",
+        heading: "Next-Gen Education Recruitment",
+        text: "EduKey360 transforms how schools, universities, and EdTech institutions discover and hire verified educators. Built on a modern cloud stack with instant search, verified credentials, and high-trust vetting.",
+        pills: ["Live on Azure", "Multi-Tenant", "DPDP Compliant", "React + .NET 10"],
+        narration: "Welcome to EduKey360 — India's premier educational recruitment ecosystem. Designed from the ground up for schools, colleges, and educators, EduKey360 modernizes talent acquisition with verified credentials, demonstration videos, and enterprise credit management.",
+        mockupType: "browser",
+        mockupUrl: "https://edukey360.com",
+        mockupHtml: `
+          <div style="background: linear-gradient(135deg, #0f766e, #115e59); padding: 18px; border-radius: 8px; color: white; text-align: center;">
+            <h3 style="font-size: 16px; font-weight: 800;">Find Your Next Faculty Position</h3>
+            <p style="font-size: 11px; opacity: 0.8; margin-top: 4px;">Search 10,000+ Verified Teaching & Academic Openings</p>
+            <div style="background: rgba(255,255,255,0.15); padding: 6px 12px; border-radius: 6px; margin-top: 10px; font-size: 11px; text-align: left;">
+              🔍 "Mathematics Teacher" • CBSE • New Delhi
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 6px;">
+            <div style="flex: 1; background: #1e293b; padding: 10px; border-radius: 6px; font-size: 11px;">
+              <div style="color: #5eead4; font-weight: bold;">Top Institutions</div>
+              <div style="color: #94a3b8; font-size: 10px;">Delhi Public School, Ryan International</div>
+            </div>
+            <div style="flex: 1; background: #1e293b; padding: 10px; border-radius: 6px; font-size: 11px;">
+              <div style="color: #f59e0b; font-weight: bold;">Verified Faculty</div>
+              <div style="color: #94a3b8; font-size: 10px;">CTET & TET Certified Educators</div>
+            </div>
+          </div>
+        `
+      },
+      {
+        id: 2,
+        title: "Candidate Experience",
+        duration: 35,
+        role: "Candidate",
+        device: "Web & Mobile",
+        badge: "Candidate Interface",
+        heading: "Verified Teaching Profiles & Easy Apply",
+        text: "Candidates create high-impact multimedia profiles featuring CTET badges, demo lecture links, and salary expectations. They filter jobs by board and work mode, answering screening questions in one click.",
+        pills: ["CTET Verification", "Demo Video Preview", "Screening Questions", "Add to Calendar"],
+        narration: "For candidates, EduKey360 puts their teaching skills front and center. Educators can link their teaching demonstration videos, certify their CTET credentials, apply with pre-screening questionnaires, and sync interview invitations directly to their calendars.",
+        mockupType: "browser",
+        mockupUrl: "https://edukey360.com/candidate/profile",
+        mockupHtml: `
+          <div style="border: 1px solid #14b8a6; background: rgba(20, 184, 166, 0.08); padding: 12px; border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-weight: 700; color: #5eead4; font-size: 12px;">Pooja Sharma, M.Sc B.Ed</span>
+              <span style="background: #065f46; color: #6ee7b7; padding: 2px 6px; border-radius: 4px; font-size: 10px;">CTET Qualified</span>
+            </div>
+            <p style="font-size: 11px; color: #cbd5e1; margin-top: 4px;">Physics Teacher (CBSE, Classes 9-12) • 5 Years Exp</p>
+            <div style="margin-top: 8px; background: #0f172a; padding: 6px 10px; border-radius: 6px; font-size: 10px; color: #38bdf8;">
+              ▶ Teaching Demo: "Newton's Laws of Motion - Class 11"
+            </div>
+          </div>
+          <div style="background: #1e293b; padding: 10px; border-radius: 6px; font-size: 11px; margin-top: 6px;">
+            <span style="color: #94a3b8;">Interview Scheduled:</span>
+            <div style="font-weight: bold; color: #fff; margin-top: 2px;">Modern Public School • Sept 12, 11:00 AM</div>
+            <button style="margin-top: 6px; background: #0f766e; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer;">📅 Add to Calendar (.ics)</button>
+          </div>
+        `
+      },
+      {
+        id: 3,
+        title: "Recruiter & ATS",
+        duration: 30,
+        role: "Recruiter",
+        device: "Web & Mobile",
+        badge: "Recruiter Dashboard",
+        heading: "Resdex Search & Collaborative ATS",
+        text: "Recruiters search candidates across India by subject specialization, board, CTET, and notice period. They review applications, view demo lectures, unlock contact info, and leave internal interview notes.",
+        pills: ["Candidate Resdex", "Contact Unlock", "ATS Interview Notes", "Single Session Lock"],
+        narration: "Recruiters access a specialized education ATS. Search faculty by CTET status, experience, and boards. Unlock candidate resumes using prepaid institutional credits, preview demonstration lectures, and coordinate interview feedback with team members.",
+        mockupType: "browser",
+        mockupUrl: "https://edukey360.com/recruiter/dashboard",
+        mockupHtml: `
+          <div style="background: #1e293b; padding: 10px; border-radius: 8px; border-left: 4px solid #10b981;">
+            <div style="display: flex; justify-content: space-between; font-size: 11px;">
+              <span style="font-weight: bold; color: #fff;">Senior Mathematics Faculty</span>
+              <span style="color: #10b981; font-weight: 600;">Wallet: 850 Credits</span>
+            </div>
+            <div style="margin-top: 8px; display: flex; gap: 6px;">
+              <span style="background: #334155; padding: 2px 6px; border-radius: 4px; font-size: 9px;">12 Applicants</span>
+              <span style="background: #064e3b; color: #34d399; padding: 2px 6px; border-radius: 4px; font-size: 9px;">4 Shortlisted</span>
+            </div>
+          </div>
+          <div style="background: #0f172a; padding: 10px; border-radius: 6px; margin-top: 6px; font-size: 11px;">
+            <div style="color: #94a3b8;">ATS Interview Remarks:</div>
+            <p style="color: #f1f5f9; font-size: 10px; margin-top: 2px;">"Candidate demonstrated outstanding pedagogy during lesson plan demo. Recommended for round 2."</p>
+          </div>
+        `
+      },
+      {
+        id: 4,
+        title: "Institute Administrator",
+        duration: 30,
+        role: "Institution Admin",
+        device: "Web Console",
+        badge: "Institutional Console",
+        heading: "Credit Wallet & Recruiter Management",
+        text: "School Principals and HR Heads purchase credit packages through Razorpay, allocate credits to specific hiring managers, reclaim unused credits, and manage institutional showcases.",
+        pills: ["Razorpay Gateway", "Team Credit Allocation", "Revocation Controls", "Audit Trails"],
+        narration: "Institute Administrators hold central governance over institutional hiring budgets. Buy credit packages securely via Razorpay, distribute allowances across departments, transfer credits between recruiters, and audit every credit consumed.",
+        mockupType: "browser",
+        mockupUrl: "https://edukey360.com/instituteadmin/dashboard",
+        mockupHtml: `
+          <div style="background: #1e293b; padding: 12px; border-radius: 8px;">
+            <div style="font-size: 11px; color: #94a3b8;">Institution Credit Wallet</div>
+            <div style="font-size: 20px; font-weight: 800; color: #34d399; margin: 4px 0;">2,400 Credits Available</div>
+            <div style="font-size: 10px; color: #64748b;">Valid through September 2027 • ₹1.00 / Credit</div>
+          </div>
+          <div style="margin-top: 8px; background: #0f172a; padding: 8px; border-radius: 6px; font-size: 10px;">
+            <div style="display: flex; justify-content: space-between; color: #cbd5e1;">
+              <span>Recruiter: Priya Verma</span>
+              <span style="color: #38bdf8;">150 Credits Allocated</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; color: #cbd5e1; margin-top: 4px;">
+              <span>Recruiter: Rajesh Nair</span>
+              <span style="color: #38bdf8;">300 Credits Allocated</span>
+            </div>
+          </div>
+        `
+      },
+      {
+        id: 5,
+        title: "SuperAdmin Governance",
+        duration: 30,
+        role: "SuperAdmin",
+        device: "Control Center",
+        badge: "SuperAdmin Console",
+        heading: "Platform Governance & Global Financial Ledger",
+        text: "SuperAdmins oversee all registered educational institutions, review platform-wide credit transactions in an immutable ledger, set dynamic price-per-credit tiers, and monitor security logs.",
+        pills: ["Global Ledger", "Pricing Rules", "Institution Verification", "Audit Logging"],
+        narration: "For platform administrators, the SuperAdmin dashboard provides comprehensive oversight. Verify newly onboarded institutions, inspect the immutable global credit ledger, update pricing formulas, and ensure platform security.",
+        mockupType: "browser",
+        mockupUrl: "https://edukey360.com/superadmin/dashboard",
+        mockupHtml: `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div style="background: #1e293b; padding: 10px; border-radius: 6px;">
+              <div style="font-size: 10px; color: #94a3b8;">Active Institutions</div>
+              <div style="font-size: 18px; font-weight: 800; color: #c084fc;">142 Schools</div>
+            </div>
+            <div style="background: #1e293b; padding: 10px; border-radius: 6px;">
+              <div style="font-size: 10px; color: #94a3b8;">Total Revenue</div>
+              <div style="font-size: 18px; font-weight: 800; color: #34d399;">₹18.4 Lakhs</div>
+            </div>
+          </div>
+          <div style="background: #0f172a; padding: 8px; border-radius: 6px; margin-top: 8px; font-size: 10px;">
+            <div style="font-weight: bold; color: #cbd5e1; margin-bottom: 4px;">Live Transaction Feed</div>
+            <div style="color: #64748b;">• TXN-948F: Global Education Trust (+1,000 TopUp)</div>
+            <div style="color: #64748b;">• TXN-120C: Modern Academy (-20 Job Posting)</div>
+          </div>
+        `
+      },
+      {
+        id: 6,
+        title: "Mobile App Experience",
+        duration: 30,
+        role: "Mobile App",
+        device: "Android & iOS",
+        badge: "React Native / Expo App",
+        heading: "Native Mobile Experience on Android & iOS",
+        text: "Candidates and Recruiters enjoy a fast, responsive mobile app with Expo push notifications, offline resume viewing, native alert-based account deletion, and biometric authentication.",
+        pills: ["React Native", "Expo Push Alerts", "Native Biometrics", "Store Compliant"],
+        narration: "The native mobile application brings the full power of EduKey360 to Android and iOS devices. Candidates receive instant push alerts when their application status changes or interviews are scheduled, and can manage their profile and data privacy on the go.",
+        mockupType: "mobile",
+        mockupUrl: "EduKey360 Mobile App",
+        mockupHtml: `
+          <div style="background: #14b8a6; padding: 8px; border-radius: 6px; color: white; text-align: center; margin-bottom: 8px;">
+            <div style="font-size: 10px; font-weight: bold;">EduKey360 Mobile</div>
+          </div>
+          <div style="background: #1e293b; padding: 8px; border-radius: 6px; margin-bottom: 6px;">
+            <div style="color: #38bdf8; font-weight: bold; font-size: 10px;">🔔 Push Notification</div>
+            <div style="color: #cbd5e1; font-size: 9px; margin-top: 2px;">Interview Invite from Delhi Public School!</div>
+          </div>
+          <div style="background: #1e293b; padding: 8px; border-radius: 6px;">
+            <div style="color: #34d399; font-weight: bold; font-size: 10px;">Profile Score: 95%</div>
+            <div style="background: #334155; height: 4px; border-radius: 2px; margin-top: 4px; overflow: hidden;">
+              <div style="background: #34d399; width: 95%; height: 100%;"></div>
+            </div>
+          </div>
+        `
+      }
+    ];
+
+    let currentSceneIndex = 0;
+    let isPlaying = false;
+    let playbackSpeed = 1.0;
+    let speechEnabled = true;
+    let timer = null;
+    let elapsedInScene = 0;
+
+    function renderScene(index) {
+      const scene = scenes[index];
+      currentSceneIndex = index;
+
+      const stage = document.getElementById('sceneContent');
+      stage.innerHTML = `
+        <div class="scene-header">
+          <span class="scene-badge">${scene.badge}</span>
+          <div class="device-indicator">
+            <span>💻</span> ${scene.device}
+          </div>
+        </div>
+
+        <div class="scene-body">
+          <div class="scene-text">
+            <h2>${scene.heading}</h2>
+            <p>${scene.text}</p>
+            <div class="feature-pills">
+              ${scene.pills.map(p => `<span class="pill">✓ ${p}</span>`).join('')}
+            </div>
+          </div>
+
+          <div>
+            ${scene.mockupType === 'browser' ? `
+              <div class="mockup-window">
+                <div class="mockup-bar">
+                  <span class="circle c-red"></span>
+                  <span class="circle c-yellow"></span>
+                  <span class="circle c-green"></span>
+                  <span class="mockup-url">${scene.mockupUrl}</span>
+                </div>
+                <div class="mockup-viewport">
+                  ${scene.mockupHtml}
+                </div>
+              </div>
+            ` : `
+              <div class="mobile-frame">
+                <div class="mobile-notch"></div>
+                <div class="mobile-screen">
+                  ${scene.mockupHtml}
+                </div>
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+
+      // Update Narration
+      document.getElementById('narrationText').textContent = `"${scene.narration}"`;
+      document.getElementById('sceneIndexTag').textContent = `Scene ${index + 1} of ${scenes.length}`;
+
+      // Update Scene List UI
+      renderSceneList();
+      updateProgress();
+
+      // Trigger Speech Synthesis if enabled and playing
+      if (speechEnabled && isPlaying && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(scene.narration);
+        utter.rate = playbackSpeed;
+        window.speechSynthesis.speak(utter);
+      }
+    }
+
+    function renderSceneList() {
+      const list = document.getElementById('sceneList');
+      list.innerHTML = scenes.map((s, idx) => `
+        <div class="scene-item ${idx === currentSceneIndex ? 'active' : ''}" onclick="selectScene(${idx})">
+          <span class="scene-num">0${s.id}</span>
+          <div class="scene-info">
+            <div class="scene-info-title">${s.title}</div>
+            <div class="scene-info-desc">${s.duration}s • ${s.role}</div>
+          </div>
+          <span class="scene-role-tag">${s.device}</span>
+        </div>
+      `).join('');
+    }
+
+    function selectScene(index) {
+      elapsedInScene = 0;
+      renderScene(index);
+    }
+
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      const playBtn = document.getElementById('playBtn');
+      if (isPlaying) {
+        playBtn.textContent = '⏸';
+        startTimer();
+        if (speechEnabled && 'speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utter = new SpeechSynthesisUtterance(scenes[currentSceneIndex].narration);
+          utter.rate = playbackSpeed;
+          window.speechSynthesis.speak(utter);
+        }
+      } else {
+        playBtn.textContent = '▶';
+        clearInterval(timer);
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      }
+    }
+
+    function startTimer() {
+      clearInterval(timer);
+      timer = setInterval(() => {
+        elapsedInScene += 1;
+        updateProgress();
+
+        if (elapsedInScene >= scenes[currentSceneIndex].duration) {
+          elapsedInScene = 0;
+          if (currentSceneIndex < scenes.length - 1) {
+            currentSceneIndex++;
+            renderScene(currentSceneIndex);
+          } else {
+            // Finished
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = '▶';
+            clearInterval(timer);
+          }
+        }
+      }, 1000 / playbackSpeed);
+    }
+
+    function updateProgress() {
+      const totalDuration = scenes.reduce((acc, s) => acc + s.duration, 0);
+      let passedDuration = 0;
+      for (let i = 0; i < currentSceneIndex; i++) {
+        passedDuration += scenes[i].duration;
+      }
+      passedDuration += elapsedInScene;
+
+      const pct = Math.min(100, (passedDuration / totalDuration) * 100);
+      document.getElementById('progressFill').style.width = pct + '%';
+
+      const curM = Math.floor(passedDuration / 60);
+      const curS = Math.floor(passedDuration % 60).toString().padStart(2, '0');
+      const totM = Math.floor(totalDuration / 60);
+      const totS = Math.floor(totalDuration % 60).toString().padStart(2, '0');
+      document.getElementById('timeIndicator').textContent = `${curM}:${curS} / ${totM}:${totS}`;
+    }
+
+    function seekVideo(event) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const pct = clickX / rect.width;
+      const totalDuration = scenes.reduce((acc, s) => acc + s.duration, 0);
+      const targetSeconds = pct * totalDuration;
+
+      let accumulated = 0;
+      for (let i = 0; i < scenes.length; i++) {
+        if (targetSeconds <= accumulated + scenes[i].duration) {
+          currentSceneIndex = i;
+          elapsedInScene = targetSeconds - accumulated;
+          renderScene(i);
+          return;
+        }
+        accumulated += scenes[i].duration;
+      }
+    }
+
+    function prevScene() {
+      if (currentSceneIndex > 0) {
+        selectScene(currentSceneIndex - 1);
+      }
+    }
+
+    function nextScene() {
+      if (currentSceneIndex < scenes.length - 1) {
+        selectScene(currentSceneIndex + 1);
+      }
+    }
+
+    function restartVideo() {
+      currentSceneIndex = 0;
+      elapsedInScene = 0;
+      renderScene(0);
+      if (!isPlaying) togglePlay();
+    }
+
+    function toggleSpeed() {
+      const speeds = [1.0, 1.25, 1.5, 2.0];
+      const curIdx = speeds.indexOf(playbackSpeed);
+      playbackSpeed = speeds[(curIdx + 1) % speeds.length];
+      document.getElementById('speedBtn').textContent = playbackSpeed + 'x';
+      if (isPlaying) startTimer();
+    }
+
+    function toggleSpeech() {
+      speechEnabled = !speechEnabled;
+      const btn = document.getElementById('speechToggle');
+      if (speechEnabled) {
+        btn.textContent = '🔊 Voice: ON';
+        if (isPlaying && 'speechSynthesis' in window) {
+          const utter = new SpeechSynthesisUtterance(scenes[currentSceneIndex].narration);
+          utter.rate = playbackSpeed;
+          window.speechSynthesis.speak(utter);
+        }
+      } else {
+        btn.textContent = '🔇 Voice: OFF';
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      }
+    }
+
+    function switchMode(mode) {
+      const mp4Box = document.getElementById('mp4PlayerContainer');
+      const interactiveBox = document.getElementById('interactivePlayerSection');
+      const tabMp4 = document.getElementById('tabMp4');
+      const tabInteractive = document.getElementById('tabInteractive');
+      const nativeVideo = document.getElementById('nativeMp4');
+
+      if (mode === 'mp4') {
+        mp4Box.style.display = 'block';
+        interactiveBox.style.display = 'none';
+        tabMp4.style.background = 'var(--primary-light)';
+        tabMp4.style.color = '#000';
+        tabInteractive.style.background = 'transparent';
+        tabInteractive.style.color = 'var(--text-muted)';
+        if (isPlaying) togglePlay();
+        nativeVideo.play().catch(() => {});
+      } else {
+        mp4Box.style.display = 'none';
+        interactiveBox.style.display = 'grid';
+        tabMp4.style.background = 'transparent';
+        tabMp4.style.color = 'var(--text-muted)';
+        tabInteractive.style.background = 'var(--primary-light)';
+        tabInteractive.style.color = '#000';
+        nativeVideo.pause();
+        renderScene(currentSceneIndex);
+      }
+    }
+
+    // Initialize
+    renderScene(0);
+  </script>
+</body>
+</html>

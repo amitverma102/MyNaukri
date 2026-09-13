@@ -3,6 +3,7 @@ namespace MyNaukri.Application.DTOs.Candidates;
 public class UpdateCandidateProfileDto
 {
     public string? PhoneNumber { get; set; }
+    public string? ProfilePictureUrl { get; set; }
     public string? Skills { get; set; }
     public string? Summary { get; set; }
     public int TotalExperienceYears { get; set; }
@@ -22,4 +23,12 @@ public class UpdateCandidateProfileDto
     public string? ExServicemanBranch { get; set; }
     
     public bool? IsSubscribedToJobAlerts { get; set; }
+    
+    // Education & Verification enhancements
+    public string? DemoVideoUrl { get; set; }
+    public bool? IsCtetQualified { get; set; }
+    public string? CtetDetails { get; set; }
+    public string? CurrentInstitution { get; set; }
+    public string? BlockedInstitutions { get; set; }
+    public string? JoiningAvailability { get; set; }
 }

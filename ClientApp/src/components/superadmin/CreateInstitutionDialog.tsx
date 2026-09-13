@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { 
   Dialog, DialogTitle, DialogContent, DialogActions, 
-  Button, TextField, Alert, MenuItem 
+  Button, TextField, Alert, MenuItem, Box, Avatar, Typography, CircularProgress 
 } from '@mui/material';
-import api from '../../api/axios';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import BusinessIcon from '@mui/icons-material/Business';
+import api, { getMediaUrl } from '../../api/axios';
 
 interface CreateProps {
   open: boolean;
@@ -13,11 +15,40 @@ interface CreateProps {
 const CreateInstitutionDialog: React.FC<CreateProps> = ({ open, onClose }) => {
   const [formData, setFormData] = useState({
     name: '', code: '', type: 0, maxRecruiters: 5, address: '', city: '', state: '', 
-    pinCode: '', email: '', phone: '', website: '',
+    pinCode: '', email: '', phone: '', website: '', logoUrl: '',
     adminFirstName: '', adminLastName: '', adminEmail: '', adminPassword: ''
   });
+  const [logoPreview, setLogoPreview] = useState<string>('');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Logo image must not exceed 5 MB.');
+        return;
+      }
+      setLogoPreview(URL.createObjectURL(file));
+
+      try {
+        setUploadingLogo(true);
+        setError('');
+        const data = new FormData();
+        data.append('file', file);
+        const res = await api.post('/superadmin/institutions/upload-logo', data, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        const uploadedUrl = res.data.logoUrl || res.data.LogoUrl || '';
+        setFormData(prev => ({ ...prev, logoUrl: uploadedUrl }));
+      } catch (err: any) {
+        setError(err.response?.data?.message || 'Failed to upload logo.');
+      } finally {
+        setUploadingLogo(false);
+      }
+    }
+  };
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -33,6 +64,7 @@ const CreateInstitutionDialog: React.FC<CreateProps> = ({ open, onClose }) => {
       if (payload.address === '') payload.address = null;
       if (payload.city === '') payload.city = null;
       if (payload.state === '') payload.state = null;
+      if (payload.logoUrl === '') payload.logoUrl = null;
 
       await api.post('/superadmin/institutions', payload);
       onClose();
@@ -69,6 +101,41 @@ const CreateInstitutionDialog: React.FC<CreateProps> = ({ open, onClose }) => {
       <DialogTitle>Create New Institution</DialogTitle>
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+        {/* Institution Logo Picker */}
+        <Box sx={{ p: 2, mb: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Avatar
+            src={logoPreview || getMediaUrl(formData.logoUrl)}
+            variant="rounded"
+            sx={{ width: 56, height: 56, bgcolor: 'primary.light' }}
+          >
+            <BusinessIcon />
+          </Avatar>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              Institution Logo
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              PNG, JPG, SVG up to 5 MB
+            </Typography>
+            <Button
+              variant="outlined"
+              component="label"
+              size="small"
+              disabled={uploadingLogo}
+              startIcon={uploadingLogo ? <CircularProgress size={14} /> : <CloudUploadIcon />}
+              sx={{ textTransform: 'none' }}
+            >
+              {uploadingLogo ? 'Uploading...' : formData.logoUrl ? 'Change Logo' : 'Select Logo'}
+              <input
+                type="file"
+                hidden
+                accept="image/*"
+                onChange={handleLogoSelect}
+              />
+            </Button>
+          </Box>
+        </Box>
         
         <TextField margin="dense" fullWidth name="name" label="Name" value={formData.name} onChange={handleChange} required />
         <TextField margin="dense" fullWidth name="code" label="Code" value={formData.code} onChange={handleChange} required />
@@ -104,7 +171,7 @@ const CreateInstitutionDialog: React.FC<CreateProps> = ({ open, onClose }) => {
         <Button 
           onClick={handleSubmit} 
           variant="contained" 
-          disabled={loading || !formData.name || !formData.code || !formData.adminFirstName || !formData.adminLastName || !formData.adminEmail || !formData.adminPassword}
+          disabled={loading || uploadingLogo || !formData.name || !formData.code || !formData.adminFirstName || !formData.adminLastName || !formData.adminEmail || !formData.adminPassword}
         >
           Create
         </Button>

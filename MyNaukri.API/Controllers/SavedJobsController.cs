@@ -44,7 +44,8 @@ public class SavedJobsController : ControllerBase
                 CompanyName = s.Job.Institution != null ? s.Job.Institution.Name : "Company Name placeholder",
                 MinSalary = s.Job.MinSalary,
                 MaxSalary = s.Job.MaxSalary,
-                IsActive = s.Job.IsActive
+                IsActive = s.Job.IsActive,
+                InstitutionLogoUrl = s.Job.Institution != null ? s.Job.Institution.LogoUrl : null
             })
             .ToListAsync();
 

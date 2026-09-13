@@ -11,6 +11,7 @@ import { CandidateProfileScreen } from '../candidate/CandidateProfileScreen';
 import { CandidateResumeScreen } from '../candidate/CandidateResumeScreen';
 import { CandidateSavedJobsScreen } from '../candidate/CandidateSavedJobsScreen';
 import { CandidateApplicationsScreen } from '../candidate/CandidateApplicationsScreen';
+import { JobDetailScreen } from '../candidate/JobDetailScreen';
 import { Ionicons } from '@expo/vector-icons';
 
 const CandidateTab = createBottomTabNavigator();
@@ -39,6 +40,7 @@ const CandidateStack = createNativeStackNavigator();
 const CandidateNavigator = () => (
   <CandidateStack.Navigator screenOptions={{ headerShown: false }}>
     <CandidateStack.Screen name="CandidateTabs" component={CandidateTabNavigator} />
+    <CandidateStack.Screen name="JobDetails" component={JobDetailScreen} />
     <CandidateStack.Screen name="SavedJobs" component={CandidateSavedJobsScreen} />
     <CandidateStack.Screen name="Applications" component={CandidateApplicationsScreen} />
   </CandidateStack.Navigator>
@@ -47,6 +49,7 @@ const CandidateNavigator = () => (
 import { RecruiterHomeScreen } from '../recruiter/RecruiterHomeScreen';
 import { RecruiterJobsScreen } from '../recruiter/RecruiterJobsScreen';
 import { RecruiterProfileScreen } from '../recruiter/RecruiterProfileScreen';
+import { RecruiterCandidateSearchScreen } from '../recruiter/RecruiterCandidateSearchScreen';
 
 const RecruiterTab = createBottomTabNavigator();
 const RecruiterNavigator = () => (
@@ -56,6 +59,7 @@ const RecruiterNavigator = () => (
       let iconName: keyof typeof Ionicons.glyphMap = 'home';
       if (route.name === 'Home') iconName = 'home';
       else if (route.name === 'Manage Jobs') iconName = 'list';
+      else if (route.name === 'Search Resdex') iconName = 'search';
       else if (route.name === 'Settings') iconName = 'settings';
       return <Ionicons name={iconName} size={size} color={color} />;
     },
@@ -64,11 +68,16 @@ const RecruiterNavigator = () => (
   })}>
     <RecruiterTab.Screen name="Home" component={RecruiterHomeScreen} />
     <RecruiterTab.Screen name="Manage Jobs" component={RecruiterJobsScreen} />
+    <RecruiterTab.Screen name="Search Resdex" component={RecruiterCandidateSearchScreen} />
     <RecruiterTab.Screen name="Settings" component={RecruiterProfileScreen} />
   </RecruiterTab.Navigator>
 );
 
 import { LoginScreen } from '../authentication/LoginScreen';
+import { RegisterScreen } from '../authentication/RegisterScreen';
+import { VerifyOtpScreen } from '../authentication/VerifyOtpScreen';
+import { ForgotPasswordScreen } from '../authentication/ForgotPasswordScreen';
+import { ResetPasswordScreen } from '../authentication/ResetPasswordScreen';
 import { AdminHomeScreen } from '../admin/AdminHomeScreen';
 import { UnsupportedRoleScreen } from '../screens/UnsupportedRoleScreen';
 
@@ -77,6 +86,10 @@ const AuthStack = createNativeStackNavigator();
 const AuthNavigator = () => (
   <AuthStack.Navigator screenOptions={{ headerShown: false }}>
     <AuthStack.Screen name="Login" component={LoginScreen} />
+    <AuthStack.Screen name="Register" component={RegisterScreen} />
+    <AuthStack.Screen name="VerifyOtp" component={VerifyOtpScreen} />
+    <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+    <AuthStack.Screen name="ResetPassword" component={ResetPasswordScreen} />
   </AuthStack.Navigator>
 );
 

@@ -39,6 +39,7 @@ public class CreateInstitutionDto
     
     public string? Phone { get; set; }
     public string? Website { get; set; }
+    public string? LogoUrl { get; set; }
 
     [Required]
     public string AdminFirstName { get; set; } = string.Empty;
@@ -87,6 +88,9 @@ public class CreditTransactionDto
     public string TransactionId { get; set; } = string.Empty;
     public Guid InstitutionId { get; set; }
     public string InstitutionName { get; set; } = string.Empty;
+    public Guid? RecruiterId { get; set; }
+    public string? RecruiterName { get; set; }
+    public string? RecruiterEmail { get; set; }
     public Guid? UserId { get; set; }
     public string UserName { get; set; } = string.Empty;
     public string TransactionType { get; set; } = string.Empty;
@@ -107,6 +111,7 @@ public class InstitutionListDto
     public string City { get; set; } = string.Empty;
     public string State { get; set; } = string.Empty;
     public InstitutionStatus Status { get; set; }
+    public string LogoUrl { get; set; } = string.Empty;
     public int CreditBalance { get; set; }
     public DateTime CreatedDate { get; set; }
     public int MaxRecruiters { get; set; }

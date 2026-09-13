@@ -4,4 +4,5 @@ public class UpdateRecruiterProfileDto
 {
     public string? CompanyName { get; set; }
     public string? Designation { get; set; }
+    public string? ProfilePictureUrl { get; set; }
 }

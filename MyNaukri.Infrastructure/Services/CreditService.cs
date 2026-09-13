@@ -20,10 +20,29 @@ public class CreditService : ICreditService
     public async Task<int> GetBalanceAsync(Guid recruiterId)
     {
         var recruiter = await _context.Recruiters
-            .AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == recruiterId);
             
-        return recruiter?.Credits ?? 0;
+        if (recruiter == null) return 0;
+
+        var hasBatches = await _context.CreditBatches
+            .AnyAsync(b => b.RecruiterId == recruiterId);
+
+        if (hasBatches)
+        {
+            var activeBatchCredits = await _context.CreditBatches
+                .Where(b => b.RecruiterId == recruiterId && b.Status == CreditBatchStatus.Active && b.ExpiryDate >= DateTime.UtcNow)
+                .SumAsync(b => b.RemainingQuantity);
+
+            if (recruiter.Credits != activeBatchCredits)
+            {
+                recruiter.Credits = activeBatchCredits;
+                await _context.SaveChangesAsync();
+            }
+
+            return activeBatchCredits;
+        }
+
+        return recruiter.Credits;
     }
 
     public async Task<RecruiterCreditRate> GetRatesAsync(Guid recruiterId)

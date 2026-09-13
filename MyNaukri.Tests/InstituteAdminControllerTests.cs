@@ -7,9 +7,11 @@ using Microsoft.EntityFrameworkCore;
 using Moq;
 using MyNaukri.API.Controllers;
 using MyNaukri.Application.Interfaces;
+using MyNaukri.Infrastructure.Services;
 using MyNaukri.Domain.Entities;
 using MyNaukri.Domain.Enums;
 using MyNaukri.Infrastructure.Data;
+using MyNaukri.Application.DTOs.SuperAdmin;
 using Xunit;
 
 namespace MyNaukri.Tests;
@@ -27,7 +29,10 @@ public class InstituteAdminControllerTests
     private InstituteAdminController CreateController(ApplicationDbContext context, Guid userId)
     {
         var mockCreditService = new Mock<IInstitutionCreditService>();
-        var controller = new InstituteAdminController(context, mockCreditService.Object);
+        var mockLedgerService = new Mock<ICreditLedgerService>();
+        var mockRazorpayService = new Mock<IRazorpayService>();
+        var mockStorageService = new Mock<IStorageService>();
+        var controller = new InstituteAdminController(context, mockCreditService.Object, mockLedgerService.Object, mockRazorpayService.Object, mockStorageService.Object);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new Claim[]
         {
@@ -221,5 +226,216 @@ public class InstituteAdminControllerTests
         }
         
         Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public async Task GetCreditTransactions_ExcludesRecruiterSideTransactions_OnlyReturnsWalletTransactions()
+    {
+        // Arrange
+        var options = GetDbContextOptions(Guid.NewGuid().ToString());
+        using var context = new ApplicationDbContext(options);
+        var adminUserId = Guid.NewGuid();
+
+        var institution = new Institution { Name = "Test Inst", Code = "TI01" };
+        context.Institutions.Add(institution);
+        await context.SaveChangesAsync();
+
+        var institutionId = institution.Id;
+        context.InstituteAdminProfiles.Add(new InstituteAdminProfile { UserId = adminUserId, InstitutionId = institutionId });
+
+        var recruiterUser = new User { FirstName = "Recruiter", LastName = "User", Email = "rec@test.com", PasswordHash = "h" };
+        context.Users.Add(recruiterUser);
+
+        var recruiter = new Recruiter { UserId = recruiterUser.Id, InstitutionId = institutionId, Credits = 200 };
+        context.Recruiters.Add(recruiter);
+        await context.SaveChangesAsync();
+
+        // 1. Wallet transaction (-200): Admin allocates 200 credits to recruiter
+        var walletTx = new CreditTransaction
+        {
+            InstitutionId = institutionId,
+            RecruiterId = null,
+            TransactionType = TransactionType.InstitutionToRecruiterAllocation,
+            Credits = -200,
+            BalanceBefore = 1000,
+            BalanceAfter = 800,
+            CreatedByUserId = adminUserId,
+            Description = "Allocation to Recruiter",
+            Reason = "Allocation to Recruiter",
+            CreatedAt = DateTime.UtcNow
+        };
+        context.CreditTransactions.Add(walletTx);
+
+        // 2. Recruiter transaction (+200): Recruiter receives 200 credits
+        var recruiterTx = new CreditTransaction
+        {
+            InstitutionId = institutionId,
+            RecruiterId = recruiter.Id,
+            TransactionType = TransactionType.InstitutionToRecruiterAllocation,
+            Credits = 200,
+            BalanceBefore = 0,
+            BalanceAfter = 200,
+            CreatedByUserId = adminUserId,
+            Description = "Allocated from Institution",
+            Reason = "Allocated from Institution",
+            CreatedAt = DateTime.UtcNow
+        };
+        context.CreditTransactions.Add(recruiterTx);
+        await context.SaveChangesAsync();
+
+        var controller = CreateController(context, adminUserId);
+
+        // Act
+        var result = await controller.GetCreditTransactions(search: null, transactionType: null, fromDate: null, toDate: null);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var paginatedResult = Assert.IsType<PaginatedResultDto<CreditTransactionDto>>(okResult.Value);
+
+        Assert.Equal(1, paginatedResult.TotalRecords);
+        Assert.Single(paginatedResult.Items);
+        var item = paginatedResult.Items.First();
+        Assert.Equal(-200, item.Credits);
+        Assert.Equal(800, item.BalanceAfter);
+    }
+
+    [Fact]
+    public async Task GetRecruiterCreditTransactions_ReturnsOnlyRecruiterTransactions_ExcludesWalletOnlyTransactions()
+    {
+        // Arrange
+        var options = GetDbContextOptions(Guid.NewGuid().ToString());
+        using var context = new ApplicationDbContext(options);
+        var adminUserId = Guid.NewGuid();
+
+        var institution = new Institution { Name = "Test Inst", Code = "TI02" };
+        context.Institutions.Add(institution);
+        await context.SaveChangesAsync();
+
+        var institutionId = institution.Id;
+        context.InstituteAdminProfiles.Add(new InstituteAdminProfile { UserId = adminUserId, InstitutionId = institutionId });
+
+        var recruiterUser = new User { FirstName = "Priya", LastName = "Sharma", Email = "priya@test.com", PasswordHash = "h" };
+        context.Users.Add(recruiterUser);
+
+        var recruiter = new Recruiter { UserId = recruiterUser.Id, InstitutionId = institutionId, Credits = 200 };
+        context.Recruiters.Add(recruiter);
+        await context.SaveChangesAsync();
+
+        // 1. Wallet transaction (RecruiterId == null)
+        var walletTx = new CreditTransaction
+        {
+            InstitutionId = institutionId,
+            RecruiterId = null,
+            TransactionType = TransactionType.InstitutionToRecruiterAllocation,
+            Credits = -200,
+            BalanceBefore = 1000,
+            BalanceAfter = 800,
+            CreatedByUserId = adminUserId,
+            Description = "Allocation to Recruiter",
+            Reason = "Allocation to Recruiter",
+            CreatedAt = DateTime.UtcNow
+        };
+        context.CreditTransactions.Add(walletTx);
+
+        // 2. Recruiter transaction (RecruiterId != null)
+        var recruiterTx = new CreditTransaction
+        {
+            InstitutionId = institutionId,
+            RecruiterId = recruiter.Id,
+            TransactionType = TransactionType.InstitutionToRecruiterAllocation,
+            Credits = 200,
+            BalanceBefore = 0,
+            BalanceAfter = 200,
+            CreatedByUserId = adminUserId,
+            Description = "Allocated from Institution",
+            Reason = "Allocated from Institution",
+            CreatedAt = DateTime.UtcNow
+        };
+        context.CreditTransactions.Add(recruiterTx);
+        await context.SaveChangesAsync();
+
+        var controller = CreateController(context, adminUserId);
+
+        // Act
+        var result = await controller.GetRecruiterCreditTransactions(recruiterId: null, search: null, transactionType: null, fromDate: null, toDate: null);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var paginatedResult = Assert.IsType<PaginatedResultDto<CreditTransactionDto>>(okResult.Value);
+
+        Assert.Equal(1, paginatedResult.TotalRecords);
+        Assert.Single(paginatedResult.Items);
+        var item = paginatedResult.Items.First();
+        Assert.Equal(200, item.Credits);
+        Assert.Equal(200, item.BalanceAfter);
+        Assert.Equal("Priya Sharma", item.RecruiterName);
+        Assert.Equal("priya@test.com", item.RecruiterEmail);
+    }
+
+    [Fact]
+    public async Task GetRecruiterCreditTransactions_FilterByRecruiterId_ReturnsOnlySpecificRecruiter()
+    {
+        // Arrange
+        var options = GetDbContextOptions(Guid.NewGuid().ToString());
+        using var context = new ApplicationDbContext(options);
+        var adminUserId = Guid.NewGuid();
+
+        var institution = new Institution { Name = "Test Inst", Code = "TI03" };
+        context.Institutions.Add(institution);
+        await context.SaveChangesAsync();
+
+        var institutionId = institution.Id;
+        context.InstituteAdminProfiles.Add(new InstituteAdminProfile { UserId = adminUserId, InstitutionId = institutionId });
+
+        var user1 = new User { FirstName = "R1", LastName = "User", Email = "r1@test.com", PasswordHash = "h" };
+        var user2 = new User { FirstName = "R2", LastName = "User", Email = "r2@test.com", PasswordHash = "h" };
+        context.Users.AddRange(user1, user2);
+
+        var recruiter1 = new Recruiter { UserId = user1.Id, InstitutionId = institutionId, Credits = 100 };
+        var recruiter2 = new Recruiter { UserId = user2.Id, InstitutionId = institutionId, Credits = 200 };
+        context.Recruiters.AddRange(recruiter1, recruiter2);
+        await context.SaveChangesAsync();
+
+        context.CreditTransactions.Add(new CreditTransaction
+        {
+            InstitutionId = institutionId,
+            RecruiterId = recruiter1.Id,
+            TransactionType = TransactionType.InstitutionToRecruiterAllocation,
+            Credits = 100,
+            BalanceBefore = 0,
+            BalanceAfter = 100,
+            CreatedByUserId = adminUserId,
+            Description = "Allocated to R1",
+            CreatedAt = DateTime.UtcNow
+        });
+
+        context.CreditTransactions.Add(new CreditTransaction
+        {
+            InstitutionId = institutionId,
+            RecruiterId = recruiter2.Id,
+            TransactionType = TransactionType.InstitutionToRecruiterAllocation,
+            Credits = 200,
+            BalanceBefore = 0,
+            BalanceAfter = 200,
+            CreatedByUserId = adminUserId,
+            Description = "Allocated to R2",
+            CreatedAt = DateTime.UtcNow
+        });
+        await context.SaveChangesAsync();
+
+        var controller = CreateController(context, adminUserId);
+
+        // Act - filter specifically for recruiter1
+        var result = await controller.GetRecruiterCreditTransactions(recruiterId: recruiter1.Id, search: null, transactionType: null, fromDate: null, toDate: null);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var paginatedResult = Assert.IsType<PaginatedResultDto<CreditTransactionDto>>(okResult.Value);
+
+        Assert.Equal(1, paginatedResult.TotalRecords);
+        Assert.Single(paginatedResult.Items);
+        var item = paginatedResult.Items.First();
+        Assert.Equal(100, item.Credits);
+        Assert.Equal("R1 User", item.RecruiterName);
     }
 }

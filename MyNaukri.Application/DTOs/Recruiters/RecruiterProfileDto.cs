@@ -8,4 +8,5 @@ public class RecruiterProfileDto
     public string Email { get; set; } = string.Empty;
     public string Designation { get; set; } = string.Empty;
     public string CompanyName { get; set; } = string.Empty;
+    public string? ProfilePictureUrl { get; set; }
 }

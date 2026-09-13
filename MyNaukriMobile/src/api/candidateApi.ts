@@ -26,6 +26,10 @@ export interface Job {
   isPlatinum: boolean;
   isApplied?: boolean;
   createdAt: string;
+  workMode?: string;
+  boardAffiliation?: string;
+  subjectDepartment?: string;
+  screeningQuestionsJson?: string;
 }
 
 export interface JobApplication {
@@ -35,6 +39,9 @@ export interface JobApplication {
   candidateId?: string;
   candidateName?: string;
   candidateEmail?: string;
+  candidatePhoneNumber?: string;
+  candidateResumeUrl?: string;
+  screeningAnswersJson?: string;
   status: string | number;
   aiMatchScore?: number;
   aiFeedback?: string;
@@ -76,8 +83,8 @@ export const candidateApi = {
     return response.data;
   },
 
-  applyToJob: async (jobId: string): Promise<{ message: string }> => {
-    const response = await apiClient.post<{ message: string }>(`/JobApplications/apply/${jobId}`);
+  applyToJob: async (jobId: string, screeningAnswersJson?: string): Promise<{ message: string }> => {
+    const response = await apiClient.post<{ message: string }>(`/JobApplications/apply/${jobId}`, { screeningAnswersJson });
     return response.data;
   },
 
@@ -103,6 +110,26 @@ export const candidateApi = {
 
   getInterviews: async (): Promise<JobApplication[]> => {
     const response = await apiClient.get<JobApplication[]>('/JobApplications/candidate/interviews');
+    return response.data;
+  },
+
+  reverifyDemoVideo: async (): Promise<{ message: string }> => {
+    const response = await apiClient.post<{ message: string }>('/Candidates/verify-demo-video');
+    return response.data;
+  },
+
+  getJobAiMatch: async (jobId: string): Promise<any> => {
+    const response = await apiClient.get(`/Jobs/${jobId}/ai-match`);
+    return response.data;
+  },
+
+  getTailoredResume: async (jobId: string): Promise<any> => {
+    const response = await apiClient.post(`/Jobs/${jobId}/ai-tailor-resume`);
+    return response.data;
+  },
+
+  saveTailoredSummary: async (summary: string): Promise<{ message: string }> => {
+    const response = await apiClient.post<{ message: string }>('/Candidates/profile/save-tailored-summary', { summary });
     return response.data;
   }
 };

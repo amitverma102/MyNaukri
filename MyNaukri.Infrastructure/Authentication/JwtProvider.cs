@@ -19,12 +19,22 @@ public class JwtProvider : IJwtProvider
 
     public string Generate(User user, Guid? sessionId = null)
     {
+        var fullName = $"{user.FirstName} {user.LastName}".Trim();
+        var displayName = !string.IsNullOrWhiteSpace(fullName) ? fullName : (user.Email.Contains('@') ? user.Email.Split('@')[0] : user.Email);
+        var firstName = !string.IsNullOrWhiteSpace(user.FirstName) ? user.FirstName : displayName;
+
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(JwtRegisteredClaimNames.Email, user.Email),
-            new(ClaimTypes.Role, user.Role.ToString())
+            new(ClaimTypes.Role, user.Role.ToString()),
+            new(ClaimTypes.Name, displayName),
+            new(ClaimTypes.GivenName, firstName),
+            new(ClaimTypes.Surname, user.LastName ?? string.Empty),
+            new("name", displayName),
+            new("firstName", firstName),
+            new("lastName", user.LastName ?? string.Empty)
         };
 
         if (sessionId.HasValue)

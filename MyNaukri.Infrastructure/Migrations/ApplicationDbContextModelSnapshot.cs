@@ -70,6 +70,9 @@ namespace MyNaukri.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("BlockedInstitutions")
+                        .HasColumnType("text");
+
                     b.Property<string>("BoardsTaught")
                         .IsRequired()
                         .HasColumnType("text");
@@ -85,12 +88,36 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("CtetDetails")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CurrentInstitution")
+                        .HasColumnType("text");
+
                     b.Property<string>("CurrentLocation")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<decimal?>("CurrentSalary")
                         .HasColumnType("numeric");
+
+                    b.Property<string>("DemoVideoRejectionReason")
+                        .HasColumnType("text");
+
+                    b.Property<int>("DemoVideoStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DemoVideoSubject")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DemoVideoSummary")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DemoVideoUrl")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DemoVideoVerifiedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("DifferentlyAbled")
                         .HasColumnType("boolean");
@@ -111,8 +138,14 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Property<string>("Gender")
                         .HasColumnType("text");
 
+                    b.Property<bool?>("IsCtetQualified")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsSubscribedToJobAlerts")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("JoiningAvailability")
+                        .HasColumnType("text");
 
                     b.Property<string>("NoticePeriod")
                         .IsRequired()
@@ -653,6 +686,9 @@ namespace MyNaukri.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("BoardAffiliation")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -693,12 +729,21 @@ namespace MyNaukri.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("ScreeningQuestionsJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SubjectDepartment")
+                        .HasColumnType("text");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("WorkMode")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -725,17 +770,35 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Property<Guid>("CandidateId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CoverLetter")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("InterviewDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("InterviewDetails")
+                        .HasColumnType("text");
+
                     b.Property<string>("InterviewLink")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("InterviewMode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InterviewVenue")
                         .HasColumnType("text");
 
                     b.Property<Guid>("JobId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ResumeUrl")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ScreeningAnswersJson")
+                        .HasColumnType("text");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -1036,9 +1099,15 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Property<Guid?>("CurrentSessionId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int>("FailedLoginAttempts")
+                        .HasColumnType("integer");
 
                     b.Property<int>("FailedOtpAttempts")
                         .HasColumnType("integer");
@@ -1057,7 +1126,14 @@ namespace MyNaukri.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("LockoutEnd")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ProfilePictureUrl")
                         .IsRequired()
                         .HasColumnType("text");
 

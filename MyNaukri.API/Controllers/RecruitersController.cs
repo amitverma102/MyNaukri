@@ -44,7 +44,8 @@ public class RecruitersController : ControllerBase
                 LastName = user.LastName,
                 Email = user.Email,
                 Designation = "",
-                CompanyName = ""
+                CompanyName = "",
+                ProfilePictureUrl = user.ProfilePictureUrl
             });
         }
 
@@ -55,7 +56,8 @@ public class RecruitersController : ControllerBase
             LastName = recruiter.User.LastName,
             Email = recruiter.User.Email,
             Designation = recruiter.Designation,
-            CompanyName = recruiter.Institution?.Name ?? string.Empty
+            CompanyName = recruiter.Institution?.Name ?? string.Empty,
+            ProfilePictureUrl = recruiter.User?.ProfilePictureUrl
         });
     }
 
@@ -105,6 +107,12 @@ public class RecruitersController : ControllerBase
         {
             recruiter.Designation = request.Designation ?? recruiter.Designation;
             if (institution != null) recruiter.InstitutionId = institution.Id;
+        }
+
+        if (request.ProfilePictureUrl != null)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user != null) user.ProfilePictureUrl = request.ProfilePictureUrl;
         }
 
         await _context.SaveChangesAsync();

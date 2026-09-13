@@ -4,7 +4,10 @@ import { useAuth } from './AuthContext';
 import { authApi } from '../api/authApi';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useNavigation, NavigationProp } from '@react-navigation/native';
+
 export const LoginScreen = () => {
+  const navigation = useNavigation<NavigationProp<any>>();
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -33,7 +36,6 @@ export const LoginScreen = () => {
   };
 
   return (
-
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <Image 
@@ -61,6 +63,13 @@ export const LoginScreen = () => {
         />
 
         <TouchableOpacity 
+          onPress={() => navigation.navigate('ForgotPassword')}
+          style={styles.forgotButton}
+        >
+          <Text style={styles.forgotText}>Forgot Password?</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
           style={[styles.button, loading && styles.buttonDisabled]} 
           onPress={handleLogin}
           disabled={loading}
@@ -71,6 +80,13 @@ export const LoginScreen = () => {
             <Text style={styles.buttonText}>Log In</Text>
           )}
         </TouchableOpacity>
+
+        <View style={styles.registerRow}>
+          <Text style={styles.registerText}>Don't have an account? </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+            <Text style={styles.registerLink}>Register</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -122,5 +138,28 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  forgotButton: {
+    alignSelf: 'flex-end',
+    marginBottom: 16,
+  },
+  forgotText: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  registerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  registerText: {
+    color: '#64748b',
+    fontSize: 14,
+  },
+  registerLink: {
+    color: '#53c5ab',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

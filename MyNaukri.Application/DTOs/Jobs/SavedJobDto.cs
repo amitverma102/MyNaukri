@@ -16,4 +16,5 @@ public class SavedJobDto
     public decimal? MinSalary { get; set; }
     public decimal? MaxSalary { get; set; }
     public bool IsActive { get; set; }
+    public string? InstitutionLogoUrl { get; set; }
 }

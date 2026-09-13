@@ -1,14 +1,43 @@
-import { AppBar, Toolbar, Button, Box } from '@mui/material';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { 
+  AppBar, 
+  Toolbar, 
+  Button, 
+  Box, 
+  Menu, 
+  MenuItem, 
+  ListItemIcon, 
+  Avatar, 
+  Typography, 
+  Divider 
+} from '@mui/material';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import LogoutIcon from '@mui/icons-material/Logout';
+import PersonIcon from '@mui/icons-material/Person';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
-import { Link as RouterLink } from 'react-router-dom';
+import { getMediaUrl } from '../api/axios';
 
 export default function NavBar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const isMenuOpen = Boolean(anchorEl);
+
+  const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('jwt_token');
+    localStorage.removeItem('user_name');
+    localStorage.removeItem('user_picture');
+    handleMenuClose();
     navigate('/login');
   };
 
@@ -21,14 +50,27 @@ export default function NavBar() {
   const isAuthenticated = !!token;
   
   let role = '';
+  let userName = localStorage.getItem('user_name') || '';
+  const userPicture = localStorage.getItem('user_picture') || '';
+
   if (token) {
     try {
       const decoded: any = jwtDecode(token);
-      role = decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || decoded.role;
+      role = decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || decoded.role || '';
+      if (!userName) {
+        userName = decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name']
+          || decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname']
+          || decoded.name
+          || decoded.firstName
+          || (decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] || decoded.email || '').split('@')[0]
+          || 'User';
+      }
     } catch (e) {
       console.error("Invalid token", e);
     }
   }
+
+  if (!userName) userName = 'User';
 
   const isCandidate = role === 'Candidate';
   const isRecruiter = role === 'Recruiter' || role === 'CompanyHR';
@@ -93,9 +135,9 @@ export default function NavBar() {
           )}
         </Box>
 
-        {/* Action Buttons */}
+        {/* Action Buttons & User Menu */}
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          {!isAuthenticated && (
+          {!isAuthenticated ? (
             <>
               <Button variant="outlined" color="primary" onClick={() => navigate('/login')} sx={{ borderRadius: 20, px: 3, textTransform: 'none', fontWeight: 600, ml: 2 }}>
                 Login
@@ -104,11 +146,130 @@ export default function NavBar() {
                 Register
               </Button>
             </>
-          )}
-          {isAuthenticated && (
-            <Button color="inherit" onClick={handleLogout} variant="outlined" sx={{ ml: 2, borderColor: 'text.primary' }}>
-              Logout
-            </Button>
+          ) : (
+            <>
+              <Button
+                id="user-menu-button"
+                aria-controls={isMenuOpen ? 'user-menu' : undefined}
+                aria-haspopup="true"
+                aria-expanded={isMenuOpen ? 'true' : undefined}
+                onClick={handleMenuClick}
+                variant="outlined"
+                sx={{
+                  ml: 2,
+                  borderColor: 'rgba(0, 0, 0, 0.15)',
+                  color: 'text.primary',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  borderRadius: 20,
+                  px: 2,
+                  py: 0.6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  '&:hover': {
+                    borderColor: 'primary.main',
+                    bgcolor: 'rgba(15, 118, 110, 0.04)'
+                  }
+                }}
+              >
+                <Avatar 
+                  src={getMediaUrl(userPicture)}
+                  sx={{ width: 28, height: 28, fontSize: '0.85rem', bgcolor: 'primary.main', color: 'white', fontWeight: 700 }}
+                >
+                  {userName.charAt(0).toUpperCase()}
+                </Avatar>
+                <Typography sx={{ fontWeight: 600, fontSize: '0.92rem' }}>
+                  {userName}
+                </Typography>
+                <KeyboardArrowDownIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              </Button>
+
+              <Menu
+                id="user-menu"
+                anchorEl={anchorEl}
+                open={isMenuOpen}
+                onClose={handleMenuClose}
+                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+                slotProps={{
+                  paper: {
+                    elevation: 4,
+                    sx: {
+                      minWidth: 200,
+                      borderRadius: 2,
+                      mt: 1,
+                      overflow: 'visible',
+                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08)'
+                    }
+                  }
+                }}
+              >
+                <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Avatar
+                    src={getMediaUrl(userPicture)}
+                    sx={{ width: 40, height: 40, fontSize: '1.1rem', bgcolor: 'primary.main' }}
+                  >
+                    {userName.charAt(0).toUpperCase()}
+                  </Avatar>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                      {userName}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'capitalize' }}>
+                      {role || 'Authenticated User'}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <Divider sx={{ my: 0.5 }} />
+
+                {isCandidate && (
+                  <MenuItem onClick={() => { handleMenuClose(); navigate('/candidate/dashboard'); }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}>
+                      <DashboardIcon fontSize="small" />
+                    </ListItemIcon>
+                    Dashboard
+                  </MenuItem>
+                )}
+
+                {isCandidate && (
+                  <MenuItem onClick={() => { handleMenuClose(); navigate('/candidate/profile'); }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}>
+                      <PersonIcon fontSize="small" />
+                    </ListItemIcon>
+                    My Profile
+                  </MenuItem>
+                )}
+
+                {isRecruiter && (
+                  <MenuItem onClick={() => { handleMenuClose(); navigate('/recruiter/profile'); }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}>
+                      <PersonIcon fontSize="small" />
+                    </ListItemIcon>
+                    Recruiter Profile
+                  </MenuItem>
+                )}
+
+                {isAdmin && (
+                  <MenuItem onClick={() => { handleMenuClose(); navigate('/admin/profile'); }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}>
+                      <PersonIcon fontSize="small" />
+                    </ListItemIcon>
+                    Settings
+                  </MenuItem>
+                )}
+
+                <Divider sx={{ my: 0.5 }} />
+
+                <MenuItem onClick={handleLogout} sx={{ color: 'error.main', fontWeight: 600 }}>
+                  <ListItemIcon sx={{ color: 'error.main', minWidth: 32 }}>
+                    <LogoutIcon fontSize="small" />
+                  </ListItemIcon>
+                  LogOut
+                </MenuItem>
+              </Menu>
+            </>
           )}
         </Box>
       </Toolbar>

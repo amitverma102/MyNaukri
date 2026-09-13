@@ -2,8 +2,15 @@
 **/.vscode
 **/bin
 **/obj
+**/bin/**
+**/obj/**
 **/node_modules
-ClientApp/dist
-ClientApp/node_modules
+**/node_modules/**
+MyNaukriMobile
+MyNaukriMobile/**
+ClientApp
+ClientApp/**
+scratch
+scratch/**
 .DS_Store
 Thumbs.db

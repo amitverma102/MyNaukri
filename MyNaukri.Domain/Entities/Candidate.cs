@@ -38,6 +38,19 @@ public class Candidate : BaseEntity
     
     public bool IsSubscribedToJobAlerts { get; set; } = true;
     
+    // Education & Verification enhancements
+    public string? DemoVideoUrl { get; set; }
+    public Enums.VideoVerificationStatus DemoVideoStatus { get; set; } = Enums.VideoVerificationStatus.Unverified;
+    public string? DemoVideoSubject { get; set; }
+    public string? DemoVideoSummary { get; set; }
+    public string? DemoVideoRejectionReason { get; set; }
+    public DateTime? DemoVideoVerifiedAt { get; set; }
+    public bool? IsCtetQualified { get; set; }
+    public string? CtetDetails { get; set; }
+    public string? CurrentInstitution { get; set; }
+    public string? BlockedInstitutions { get; set; }
+    public string? JoiningAvailability { get; set; }
+
     public ICollection<JobApplication> Applications { get; set; } = new List<JobApplication>();
     public ICollection<Resume> Resumes { get; set; } = new List<Resume>();
     public ICollection<CandidateSkill> CandidateSkills { get; set; } = new List<CandidateSkill>();

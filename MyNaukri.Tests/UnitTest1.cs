@@ -1,4 +1,4 @@
-﻿namespace MyNaukri.Tests;
+namespace MyNaukri.Tests;
 
 public class UnitTest1
 {
@@ -8,3 +8,5 @@ public class UnitTest1
 
     }
 }
+
+

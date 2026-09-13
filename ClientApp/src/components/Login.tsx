@@ -12,10 +12,14 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const searchParams = new URLSearchParams(location.search);
+  const returnUrl = searchParams.get('returnUrl') || '';
+  const applyJobId = searchParams.get('applyJobId');
+
   useEffect(() => {
     if (location.state && location.state.message) {
       setSuccessMsg(location.state.message);
-      window.history.replaceState({}, document.title)
+      window.history.replaceState({}, document.title);
     }
   }, [location]);
 
@@ -27,10 +31,20 @@ export default function Login() {
     onSuccess: (data) => {
       localStorage.setItem('jwt_token', data.token);
       const decoded: any = jwtDecode(data.token);
+      const name = data.userName 
+        || decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] 
+        || decoded.name 
+        || decoded.firstName 
+        || (decoded.email ? decoded.email.split('@')[0] : '');
+      if (name) {
+        localStorage.setItem('user_name', name);
+      }
+      if (data.profilePictureUrl || data.ProfilePictureUrl) {
+        localStorage.setItem('user_picture', data.profilePictureUrl || data.ProfilePictureUrl);
+      } else {
+        localStorage.removeItem('user_picture');
+      }
       const role = decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || decoded.role;
-      const searchParams = new URLSearchParams(location.search);
-      const returnUrl = searchParams.get('returnUrl');
-      const applyJobId = searchParams.get('applyJobId');
 
       let targetUrl = '';
       if (role === 'Recruiter' || role === 'CompanyHR') {
@@ -55,7 +69,7 @@ export default function Login() {
 
   return (
     <Container maxWidth="sm">
-      <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <Box sx={{ mt: 8, mb: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Link component={RouterLink} to="/" style={{ textDecoration: 'none', color: 'inherit', marginBottom: '16px' }}>
           <img 
             src="/logo.jpg" 
@@ -63,7 +77,13 @@ export default function Login() {
             style={{ height: '60px', objectFit: 'contain' }} 
           />
         </Link>
-        <Typography component="h1" variant="h5">Sign in to EduKey360</Typography>
+        <Typography component="h1" variant="h5" sx={{ fontWeight: 700 }}>
+          Sign in to EduKey360
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
+          Find education vacancies, track applications & manage your educational portal.
+        </Typography>
+
         <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
           {successMsg && <Alert severity="success" sx={{ mb: 2 }}>{successMsg}</Alert>}
           {loginMutation.isError && (
@@ -107,7 +127,7 @@ export default function Login() {
             fullWidth
             variant="contained"
             size="large"
-            sx={{ mt: 3, mb: 2 }}
+            sx={{ mt: 3, mb: 2, py: 1.3, fontWeight: 700, fontSize: '1rem', textTransform: 'none' }}
             disabled={loginMutation.isPending}
           >
             {loginMutation.isPending ? 'Signing in...' : 'Sign In'}

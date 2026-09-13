@@ -1,7 +1,14 @@
+import { useState } from 'react';
 import { Box, Typography, Container, Grid, Paper, Avatar, Button, Card, CardContent, Divider, Chip, CircularProgress, Alert } from '@mui/material';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '../api/axios';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import api, { getMediaUrl } from '../api/axios';
 import { useNavigate } from 'react-router-dom';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import EditNoteIcon from '@mui/icons-material/EditNote';
+import SchoolIcon from '@mui/icons-material/School';
+import JobAiMatchDialog from './candidate/JobAiMatchDialog';
+import TailorResumeDialog from './candidate/TailorResumeDialog';
+import ApplyJobDialog from './candidate/ApplyJobDialog';
 
 interface CandidateProfile {
   id?: string;
@@ -22,6 +29,8 @@ interface CandidateProfile {
   Summary?: string;
   totalExperienceYears?: number;
   TotalExperienceYears?: number;
+  profilePictureUrl?: string;
+  ProfilePictureUrl?: string;
 }
 
 interface Job {
@@ -33,6 +42,8 @@ interface Job {
   maxSalary: number;
   createdAt: string;
   companyName?: string;
+  institutionId?: string;
+  institutionLogoUrl?: string;
   keywords?: string;
 }
 
@@ -45,6 +56,8 @@ interface JobApplication {
 export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [matchDialogJob, setMatchDialogJob] = useState<any | null>(null);
+  const [tailorDialogJob, setTailorDialogJob] = useState<any | null>(null);
   
   // Fetch Profile
   const { data: profile, isLoading: profileLoading, error: profileError } = useQuery<CandidateProfile>({
@@ -56,20 +69,7 @@ export default function Dashboard() {
     retry: false
   });
 
-  const applyMutation = useMutation({
-    mutationFn: async (jobId: string) => {
-      await api.post(`/jobapplications/apply/${jobId}`);
-    },
-    onSuccess: () => {
-      alert('Applied successfully!');
-      queryClient.invalidateQueries({ queryKey: ['applications'] });
-    },
-    onError: (err: any) => {
-      const data = err.response?.data;
-      const message = typeof data === 'string' && data ? data : (data?.title || data?.message || err.message || 'Failed to apply.');
-      alert(message);
-    }
-  });
+  const [applyDialogJob, setApplyDialogJob] = useState<any | null>(null);
 
   // Fetch Applications
   const { data: applications } = useQuery<JobApplication[]>({
@@ -89,6 +89,15 @@ export default function Dashboard() {
       return response.data;
     },
     enabled: !!profile // Only fetch if profile exists
+  });
+
+  // Fetch Top Institutions hiring from live job openings
+  const { data: topInstitutions, isLoading: topInstitutionsLoading } = useQuery({
+    queryKey: ['top-institutions'],
+    queryFn: async () => {
+      const response = await api.get('/jobs/top-institutions');
+      return response.data;
+    }
   });
 
   if (profileLoading) {
@@ -125,7 +134,10 @@ export default function Dashboard() {
         {/* Left Column: Profile Summary */}
         <Grid size={{ xs: 12, md: 4 }}>
           <Paper elevation={1} sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-            <Avatar sx={{ width: 100, height: 100, mb: 2, bgcolor: 'primary.main', fontSize: '2rem' }}>
+            <Avatar
+              src={getMediaUrl(profile?.profilePictureUrl || profile?.ProfilePictureUrl)}
+              sx={{ width: 100, height: 100, mb: 2, bgcolor: 'primary.main', fontSize: '2rem' }}
+            >
               {profile ? (profile.firstName?.[0] || profile.FirstName?.[0] || 'U') : 'U'}
             </Avatar>
             <Typography variant="h6" gutterBottom>
@@ -168,7 +180,16 @@ export default function Dashboard() {
 
         {/* Middle Column: Recommended Jobs */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Typography variant="h5" sx={{ fontWeight: 'bold' }} gutterBottom>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h4" sx={{ fontWeight: 800, color: 'text.primary', letterSpacing: '-0.5px' }}>
+              Hello {profile?.firstName || profile?.FirstName || localStorage.getItem('user_name') || 'User'}
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Discover education openings tailored to your qualifications and preferences.
+            </Typography>
+          </Box>
+
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }} gutterBottom>
             Jobs recommended for you
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -177,7 +198,7 @@ export default function Dashboard() {
 
           {profileError && (
             <Alert severity="warning" sx={{ mb: 3 }}>
-              Your Candidate profile is incomplete. Please update your profile to get personalized job recommendations.
+              Your profile is incomplete. Please update your profile to get personalized job recommendations.
             </Alert>
           )}
 
@@ -186,14 +207,38 @@ export default function Dashboard() {
           {jobs?.map((job) => (
             <Card key={job.id} sx={{ mb: 2, borderRadius: 2, boxShadow: 1, transition: '0.3s', '&:hover': { boxShadow: 4, transform: 'translateY(-2px)' } }}>
               <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <Box>
-                    <Typography variant="h6" color="primary.main" sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
-                      {job.title}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      {job.companyName || 'Unknown Institution'} • 4.5 ★ • Job ID: {job.id?.substring(0, 8)}
-                    </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1, minWidth: 0 }}>
+                    <Avatar
+                      src={getMediaUrl(job.institutionLogoUrl)}
+                      variant="rounded"
+                      sx={{
+                        width: 44,
+                        height: 44,
+                        bgcolor: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        p: 0.5,
+                        mt: 0.3,
+                        flexShrink: 0,
+                        cursor: job.institutionId ? 'pointer' : 'default',
+                        '& img': { objectFit: 'contain' }
+                      }}
+                      onClick={() => {
+                        if (job.institutionId && job.institutionId !== '00000000-0000-0000-0000-000000000000') {
+                          navigate(`/institution/${job.institutionId}`);
+                        }
+                      }}
+                    >
+                      <SchoolIcon sx={{ color: 'primary.main', fontSize: 24 }} />
+                    </Avatar>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography variant="h6" color="primary.main" sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }} onClick={() => setApplyDialogJob(job)}>
+                        {job.title}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" gutterBottom sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {job.companyName || 'Unknown Institution'} • 4.5 ★ • Job ID: {job.id?.substring(0, 8)}
+                      </Typography>
+                    </Box>
                   </Box>
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
                     <Chip label="Match" color="success" size="small" variant="outlined" />
@@ -204,8 +249,8 @@ export default function Dashboard() {
                           variant={hasApplied ? "outlined" : "contained"}
                           size="small"
                           color={hasApplied ? "success" : "primary"}
-                          onClick={() => applyMutation.mutate(job.id)}
-                          disabled={hasApplied || applyMutation.isPending}
+                          onClick={() => setApplyDialogJob(job)}
+                          disabled={hasApplied}
                         >
                           {hasApplied ? 'Applied' : 'Apply'}
                         </Button>
@@ -233,6 +278,29 @@ export default function Dashboard() {
                     <Chip label="General" size="small" sx={{ bgcolor: 'grey.100' }} />
                   )}
                 </Box>
+
+                <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="primary"
+                    startIcon={<AutoAwesomeIcon />}
+                    onClick={() => setMatchDialogJob(job)}
+                    sx={{ textTransform: 'none', borderRadius: 2, fontWeight: 600, fontSize: '0.75rem' }}
+                  >
+                    AI Match
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<EditNoteIcon />}
+                    onClick={() => setTailorDialogJob(job)}
+                    sx={{ textTransform: 'none', borderRadius: 2, fontWeight: 600, fontSize: '0.75rem' }}
+                  >
+                    Tailor Resume ✨
+                  </Button>
+                </Box>
               </CardContent>
             </Card>
           ))}
@@ -244,39 +312,106 @@ export default function Dashboard() {
           )}
         </Grid>
 
-        {/* Right Column: Promos & Top Companies */}
+        {/* Right Column: Top Companies */}
         <Grid size={{ xs: 12, md: 3 }}>
-          <Paper sx={{ p: 2, borderRadius: 2, boxShadow: 3, mb: 3, background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.dark' }}>
-              Boost your visibility!
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 1, mb: 2 }}>
-              Get 3x more recruiter views with a premium profile.
-            </Typography>
-            <Button variant="contained" size="small" color="primary">
-              Upgrade Now
-            </Button>
-          </Paper>
+          {/* Boost your visibility / Premium profile promo hidden until feature is LIVE */}
+
 
           <Paper sx={{ p: 2, borderRadius: 2, boxShadow: 3 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }} gutterBottom>Top Institutions hiring</Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 3 }}>
-              {['Delhi Public School', 'Coursera', 'Khan Academy'].map((company, i) => (
-                <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Avatar variant="rounded" sx={{ width: 40, height: 40, bgcolor: 'grey.200', color: 'grey.700' }}>
-                    {company[0]}
-                  </Avatar>
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{company}</Typography>
-                    <Typography variant="caption" color="text.secondary">Active hiring</Typography>
+            {topInstitutionsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : topInstitutions && topInstitutions.length > 0 ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 2 }}>
+                {topInstitutions.map((inst: any) => (
+                  <Box 
+                    key={inst.institutionId} 
+                    onClick={() => navigate('/jobs', { state: { companyName: inst.institutionName } })}
+                    sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 1.5, 
+                      cursor: 'pointer',
+                      p: 1,
+                      borderRadius: 1.5,
+                      transition: '0.2s',
+                      '&:hover': { bgcolor: '#f0f7ff', transform: 'translateX(2px)' }
+                    }}
+                  >
+                    <Avatar 
+                      src={getMediaUrl(inst.logoUrl)}
+                      variant="rounded" 
+                      sx={{ 
+                        width: 42, 
+                        height: 42, 
+                        bgcolor: '#ffffff', 
+                        border: '1px solid #e2e8f0',
+                        p: 0.5,
+                        flexShrink: 0,
+                        '& img': { objectFit: 'contain' }
+                      }}
+                    >
+                      <SchoolIcon sx={{ color: 'primary.main', fontSize: 22 }} />
+                    </Avatar>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {inst.institutionName}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {inst.jobCount} {inst.jobCount === 1 ? 'opening' : 'openings'} {inst.city ? `• ${inst.city}` : 'available'}
+                      </Typography>
+                    </Box>
                   </Box>
-                </Box>
-              ))}
-            </Box>
+                ))}
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                No active openings found at this time.
+              </Typography>
+            )}
           </Paper>
         </Grid>
 
       </Grid>
+
+      {/* AI Match & Gap Analysis Dialog */}
+      <JobAiMatchDialog
+        open={Boolean(matchDialogJob)}
+        jobId={matchDialogJob?.id || null}
+        jobTitle={matchDialogJob?.title}
+        companyName={matchDialogJob?.companyName}
+        onClose={() => setMatchDialogJob(null)}
+        onOpenTailor={(id) => {
+          const targetJob = matchDialogJob || jobs?.find((j: any) => j.id === id);
+          setTailorDialogJob(targetJob || { id });
+        }}
+      />
+
+      {/* AI Resume Tailoring Dialog */}
+      <TailorResumeDialog
+        open={Boolean(tailorDialogJob)}
+        jobId={tailorDialogJob?.id || null}
+        jobTitle={tailorDialogJob?.title}
+        companyName={tailorDialogJob?.companyName}
+        onClose={() => setTailorDialogJob(null)}
+        onAppliedSuccessfully={() => {
+          queryClient.invalidateQueries({ queryKey: ['applications'] });
+          queryClient.invalidateQueries({ queryKey: ['recommendedJobs'] });
+        }}
+      />
+
+      {/* Apply Job Dialog */}
+      <ApplyJobDialog
+        open={Boolean(applyDialogJob)}
+        job={applyDialogJob}
+        onClose={() => setApplyDialogJob(null)}
+        onAppliedSuccessfully={() => {
+          queryClient.invalidateQueries({ queryKey: ['applications'] });
+          queryClient.invalidateQueries({ queryKey: ['recommendedJobs'] });
+        }}
+      />
     </Container>
   );
 }

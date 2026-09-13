@@ -17,7 +17,13 @@ public class JobApplication : BaseEntity
     public string AiFeedback { get; set; } = string.Empty;
     
     public DateTime? InterviewDate { get; set; }
+    public InterviewMode? InterviewMode { get; set; }
     public string? InterviewLink { get; set; }
+    public string? InterviewVenue { get; set; }
+    public string? InterviewDetails { get; set; }
+    public string? ScreeningAnswersJson { get; set; }
+    public string? CoverLetter { get; set; }
+    public string? ResumeUrl { get; set; }
     
     public ICollection<JobApplicationComment> Comments { get; set; } = new List<JobApplicationComment>();
 }

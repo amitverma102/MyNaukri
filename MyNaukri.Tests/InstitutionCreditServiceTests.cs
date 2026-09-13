@@ -6,6 +6,8 @@ using MyNaukri.Domain.Entities;
 using MyNaukri.Domain.Enums;
 using MyNaukri.Infrastructure.Data;
 using MyNaukri.Infrastructure.Services;
+using MyNaukri.Application.Interfaces;
+using Moq;
 using Xunit;
 
 namespace MyNaukri.Tests;
@@ -27,34 +29,23 @@ public class InstitutionCreditServiceTests
         var options = GetDbContextOptions("TestDb_AllocateSuccess");
         using var context = new ApplicationDbContext(options);
 
-        var institution = new Institution { Name = "Test Inst" };
-        var wallet = new InstitutionCreditWallet { InstitutionId = institution.Id, AvailableCredits = 1000, TotalPurchasedCredits = 1000 };
-        var recruiterUser = new User { Email = "recruiter@test.com", FirstName = "R", LastName = "R", PasswordHash = "hash" };
-        var recruiter = new Recruiter { UserId = recruiterUser.Id, InstitutionId = institution.Id, Credits = 10 };
-        
-        context.Institutions.Add(institution);
-        context.InstitutionCreditWallets.Add(wallet);
-        context.Users.Add(recruiterUser);
-        context.Recruiters.Add(recruiter);
-        await context.SaveChangesAsync();
+        var institutionId = Guid.NewGuid();
+        var recruiterId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
 
-        var service = new InstitutionCreditService(context);
+        var mockLedgerService = new Mock<ICreditLedgerService>();
+        mockLedgerService
+            .Setup(m => m.TransferToRecruiterAsync(institutionId, recruiterId, 200, userId, "Test allocation"))
+            .ReturnsAsync(true);
+
+        var service = new InstitutionCreditService(context, mockLedgerService.Object);
 
         // Act
-        var result = await service.AllocateToRecruiterAsync(institution.Id, recruiter.Id, 200, Guid.NewGuid(), "Test allocation");
+        var result = await service.AllocateToRecruiterAsync(institutionId, recruiterId, 200, userId, "Test allocation");
 
         // Assert
         Assert.True(result);
-        
-        var updatedWallet = await context.InstitutionCreditWallets.FindAsync(wallet.Id);
-        Assert.Equal(800, updatedWallet.AvailableCredits);
-        Assert.Equal(200, updatedWallet.TotalAllocatedCredits);
-
-        var updatedRecruiter = await context.Recruiters.FindAsync(recruiter.Id);
-        Assert.Equal(210, updatedRecruiter.Credits);
-
-        var transactions = await context.CreditTransactions.ToListAsync();
-        Assert.Equal(2, transactions.Count); // One debit, one credit
+        mockLedgerService.Verify(m => m.TransferToRecruiterAsync(institutionId, recruiterId, 200, userId, "Test allocation"), Times.Once);
     }
 
     [Fact]
@@ -65,22 +56,21 @@ public class InstitutionCreditServiceTests
         using var context = new ApplicationDbContext(options);
 
         var institutionId = Guid.NewGuid();
-        var wallet = new InstitutionCreditWallet { InstitutionId = institutionId, AvailableCredits = 50 };
-        var recruiter = new Recruiter { InstitutionId = institutionId, Credits = 10 };
-        
-        context.InstitutionCreditWallets.Add(wallet);
-        context.Recruiters.Add(recruiter);
-        await context.SaveChangesAsync();
+        var recruiterId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
 
-        var service = new InstitutionCreditService(context);
+        var mockLedgerService = new Mock<ICreditLedgerService>();
+        mockLedgerService
+            .Setup(m => m.TransferToRecruiterAsync(institutionId, recruiterId, 200, userId, "Test"))
+            .ReturnsAsync(false);
+
+        var service = new InstitutionCreditService(context, mockLedgerService.Object);
 
         // Act
-        var result = await service.AllocateToRecruiterAsync(institutionId, recruiter.Id, 200, Guid.NewGuid(), "Test");
+        var result = await service.AllocateToRecruiterAsync(institutionId, recruiterId, 200, userId, "Test");
 
         // Assert
         Assert.False(result);
-        var updatedWallet = await context.InstitutionCreditWallets.FirstOrDefaultAsync();
-        Assert.Equal(50, updatedWallet.AvailableCredits); // Unchanged
     }
 
     [Fact]
@@ -91,28 +81,22 @@ public class InstitutionCreditServiceTests
         using var context = new ApplicationDbContext(options);
 
         var institutionId = Guid.NewGuid();
-        var r1 = new Recruiter { InstitutionId = institutionId, Credits = 100 };
-        var r2 = new Recruiter { InstitutionId = institutionId, Credits = 50 };
-        
-        context.Recruiters.Add(r1);
-        context.Recruiters.Add(r2);
-        await context.SaveChangesAsync();
+        var r1Id = Guid.NewGuid();
+        var r2Id = Guid.NewGuid();
+        var userId = Guid.NewGuid();
 
-        var service = new InstitutionCreditService(context);
+        var mockLedgerService = new Mock<ICreditLedgerService>();
+        mockLedgerService
+            .Setup(m => m.TransferBetweenRecruitersAsync(institutionId, r1Id, r2Id, 30, userId, "Transfer"))
+            .ReturnsAsync(true);
+
+        var service = new InstitutionCreditService(context, mockLedgerService.Object);
 
         // Act
-        var result = await service.TransferBetweenRecruitersAsync(institutionId, r1.Id, r2.Id, 30, Guid.NewGuid(), "Transfer");
+        var result = await service.TransferBetweenRecruitersAsync(institutionId, r1Id, r2Id, 30, userId, "Transfer");
 
         // Assert
         Assert.True(result);
-        
-        var updatedR1 = await context.Recruiters.FindAsync(r1.Id);
-        var updatedR2 = await context.Recruiters.FindAsync(r2.Id);
-        
-        Assert.Equal(70, updatedR1.Credits);
-        Assert.Equal(80, updatedR2.Credits);
-
-        var txs = await context.CreditTransactions.ToListAsync();
-        Assert.Equal(2, txs.Count);
+        mockLedgerService.Verify(m => m.TransferBetweenRecruitersAsync(institutionId, r1Id, r2Id, 30, userId, "Transfer"), Times.Once);
     }
 }

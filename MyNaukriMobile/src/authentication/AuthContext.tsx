@@ -29,11 +29,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const decodeUserFromToken = (token: string): UserInfo | null => {
     try {
       const decoded: any = jwtDecode(token);
+      const email = decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] || decoded.email || '';
+      const firstName = decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname'] 
+        || decoded.firstName 
+        || decoded['firstName']
+        || decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name']?.split(' ')[0]
+        || decoded.name?.split(' ')[0]
+        || (email ? email.split('@')[0] : 'User');
+      const lastName = decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname'] 
+        || decoded.lastName 
+        || decoded['lastName']
+        || '';
+
       return {
         id: decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] || decoded.sub || '',
-        email: decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] || decoded.email || '',
-        firstName: '', // The JWT doesn't contain names by default in this implementation unless added
-        lastName: '',
+        email,
+        firstName,
+        lastName,
         role: decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || decoded.role || '',
       };
     } catch (e) {

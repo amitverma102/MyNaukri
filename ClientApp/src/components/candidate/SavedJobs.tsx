@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, Typography, Container, CircularProgress, Box, Chip, IconButton } from '@mui/material';
+import { Card, CardContent, Typography, Container, CircularProgress, Box, Chip, IconButton, Avatar } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
-import api from '../../api/axios';
+import SchoolIcon from '@mui/icons-material/School';
+import api, { getMediaUrl } from '../../api/axios';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 
 export default function SavedJobs() {
@@ -41,19 +42,38 @@ export default function SavedJobs() {
         <Typography color="text.secondary">You haven't saved any jobs yet.</Typography>
       ) : (
         savedJobs.map((save: any) => (
-          <Card key={save.id} sx={{ mb: 2 }}>
+          <Card key={save.id} sx={{ mb: 2, borderRadius: 2 }}>
             <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <Box>
-                  <Typography variant="h6">{save.jobTitle}</Typography>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    {save.companyName} • Job ID: {save.jobId?.substring(0, 8)}
-                  </Typography>
-                  <Typography sx={{ mb: 1.5 }} color="text.secondary">
-                    {save.jobLocation}
-                    {save.minSalary && save.maxSalary && ` | ₹${save.minSalary/1000}K - ₹${save.maxSalary/1000}K`}
-                  </Typography>
-                  <Chip label={save.isActive ? 'Active' : 'Closed'} color={save.isActive ? 'success' : 'default'} size="small" />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, flex: 1, minWidth: 0 }}>
+                  <Avatar
+                    src={getMediaUrl(save.institutionLogoUrl)}
+                    variant="rounded"
+                    sx={{
+                      width: 46,
+                      height: 46,
+                      bgcolor: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      p: 0.5,
+                      mt: 0.5,
+                      flexShrink: 0,
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                      '& img': { objectFit: 'contain' }
+                    }}
+                  >
+                    <SchoolIcon sx={{ color: 'primary.main', fontSize: 24 }} />
+                  </Avatar>
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography variant="h6">{save.jobTitle}</Typography>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      {save.companyName} • Job ID: {save.jobId?.substring(0, 8)}
+                    </Typography>
+                    <Typography sx={{ mb: 1.5 }} color="text.secondary">
+                      {save.jobLocation}
+                      {save.minSalary && save.maxSalary && ` | ₹${save.minSalary/1000}K - ₹${save.maxSalary/1000}K`}
+                    </Typography>
+                    <Chip label={save.isActive ? 'Active' : 'Closed'} color={save.isActive ? 'success' : 'default'} size="small" />
+                  </Box>
                 </Box>
                 <IconButton 
                   color="error" 

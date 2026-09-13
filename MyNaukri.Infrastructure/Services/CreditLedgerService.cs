@@ -64,20 +64,30 @@ public class CreditLedgerService : ICreditLedgerService
         }
 
         // Get current balance
-        int currentBalance = 0;
+        int currentBalance = totalAvailable;
+        Recruiter? recruiter = null;
+        InstitutionCreditWallet? wallet = null;
+
         if (recruiterId.HasValue)
         {
-            var recruiter = await _context.Recruiters.FindAsync(recruiterId.Value);
-            if (recruiter != null) currentBalance = recruiter.Credits;
+            recruiter = await _context.Recruiters.FindAsync(recruiterId.Value);
         }
         else
         {
-            var wallet = _context.InstitutionCreditWallets.Local.FirstOrDefault(w => w.InstitutionId == institutionId) 
+            wallet = _context.InstitutionCreditWallets.Local.FirstOrDefault(w => w.InstitutionId == institutionId) 
                          ?? await _context.InstitutionCreditWallets.FirstOrDefaultAsync(w => w.InstitutionId == institutionId);
-            if (wallet != null) currentBalance = wallet.AvailableCredits;
         }
 
         int newBalance = currentBalance - amount;
+
+        if (recruiter != null)
+        {
+            recruiter.Credits = newBalance;
+        }
+        else if (wallet != null)
+        {
+            wallet.AvailableCredits = newBalance;
+        }
 
         var transaction = new CreditTransaction
         {
@@ -89,6 +99,7 @@ public class CreditLedgerService : ICreditLedgerService
             BalanceAfter = newBalance,
             ReferenceId = referenceId,
             Description = description,
+            Reason = description,
             CreatedByUserId = performedByUserId
         };
 
@@ -159,6 +170,7 @@ public class CreditLedgerService : ICreditLedgerService
             BalanceBefore = currentBalance,
             BalanceAfter = currentBalance + amount,
             Description = description,
+            Reason = description,
             CreatedByUserId = performedByUserId,
             PriceBeforeDiscount = price,
             DiscountPercentage = discountPct,
@@ -252,19 +264,22 @@ public class CreditLedgerService : ICreditLedgerService
         if (totalAvailable < amount) return false;
 
         // Deduct from Source
-        int sourceBalance = 0;
-        int newSourceBalance = 0;
+        int sourceBalance = totalAvailable;
+        int newSourceBalance = totalAvailable - amount;
         if (sourceRecruiterId.HasValue)
         {
             var r = await _context.Recruiters.FindAsync(sourceRecruiterId.Value);
-            if (r != null) { sourceBalance = r.Credits; r.Credits -= amount; newSourceBalance = r.Credits; }
+            if (r != null) { r.Credits = newSourceBalance; }
         }
         else
         {
             var w = _context.InstitutionCreditWallets.Local.FirstOrDefault(w => w.InstitutionId == institutionId) 
                     ?? await _context.InstitutionCreditWallets.FirstOrDefaultAsync(w => w.InstitutionId == institutionId);
-            if (w != null) { sourceBalance = w.AvailableCredits; w.AvailableCredits -= amount; w.TotalAllocatedCredits += amount; newSourceBalance = w.AvailableCredits; }
+            if (w != null) { w.AvailableCredits = newSourceBalance; w.TotalAllocatedCredits += amount; }
         }
+
+        string sourceDesc = description ?? (targetRecruiterId.HasValue ? "Allocation to Recruiter" : "Transfer Out");
+        string targetDesc = description ?? (sourceRecruiterId.HasValue ? "Transferred from Recruiter" : "Allocated from Institution");
 
         var sourceTransaction = new CreditTransaction
         {
@@ -275,7 +290,8 @@ public class CreditLedgerService : ICreditLedgerService
             BalanceBefore = sourceBalance,
             BalanceAfter = newSourceBalance,
             CreatedByUserId = performedByUserId,
-            Description = description ?? "Transfer Out"
+            Description = sourceDesc,
+            Reason = description ?? sourceDesc
         };
         _context.CreditTransactions.Add(sourceTransaction);
 
@@ -302,7 +318,8 @@ public class CreditLedgerService : ICreditLedgerService
             BalanceBefore = targetBalance,
             BalanceAfter = targetBalance + amount,
             CreatedByUserId = performedByUserId,
-            Description = description ?? "Transfer In"
+            Description = targetDesc,
+            Reason = description ?? targetDesc
         };
         _context.CreditTransactions.Add(targetTransaction);
 

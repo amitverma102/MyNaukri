@@ -19,6 +19,17 @@ public class CandidateSearchResultDto
     public bool ExServiceman { get; set; }
     public ExServicemanBranch? ExServicemanBranch { get; set; }
     
+    // Education & Status fields
+    public string? NoticePeriod { get; set; }
+    public string? ClassesTaught { get; set; }
+    public string? BoardsTaught { get; set; }
+    public bool? IsCtetQualified { get; set; }
+    public string? DemoVideoUrl { get; set; }
+    public string? DemoVideoStatus { get; set; }
+    public string? DemoVideoSubject { get; set; }
+    public string? DemoVideoSummary { get; set; }
+    public string? JoiningAvailability { get; set; }
+    
     // Access flags
     public bool HasUnlockedContact { get; set; }
     public bool HasDownloadedResume { get; set; }
@@ -27,4 +38,9 @@ public class CandidateSearchResultDto
     public string? Email { get; set; }
     public string? PhoneNumber { get; set; }
     public string? ResumeUrl { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+
+    // AI Recommendation
+    public decimal? AiRecommendationScore { get; set; }
+    public string? AiRecommendationReason { get; set; }
 }

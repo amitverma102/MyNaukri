@@ -194,6 +194,7 @@ public class SuperAdminController : ControllerBase
             Email = request.Email ?? string.Empty,
             Phone = request.Phone ?? string.Empty,
             Website = request.Website ?? string.Empty,
+            LogoUrl = request.LogoUrl ?? string.Empty,
             Status = InstitutionStatus.Active
         };
 
@@ -233,9 +234,53 @@ public class SuperAdminController : ControllerBase
             institution.Name,
             institution.Code,
             institution.Type,
+            institution.LogoUrl,
             institution.Status,
             createdDate = institution.CreatedAt
         });
+    }
+
+    [HttpPost("institutions/{id}/logo")]
+    public async Task<IActionResult> UploadInstitutionLogo(Guid id, [FromForm] IFormFile file)
+    {
+        if (file == null || file.Length == 0) return BadRequest("Please provide a logo file.");
+        if (file.Length > 5 * 1024 * 1024) return BadRequest("Image size must be 5MB or less.");
+
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg" };
+        if (!allowed.Contains(ext)) return BadRequest("Invalid image format. Allowed formats are JPG, JPEG, PNG, WEBP, GIF, SVG.");
+
+        var institution = await _context.Institutions.FindAsync(id);
+        if (institution == null) return NotFound("Institution not found.");
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+        var fileBytes = ms.ToArray();
+
+        var logoUrl = await _storageService.UploadImageAsync(fileBytes, file.FileName, "logos");
+        institution.LogoUrl = logoUrl;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { LogoUrl = logoUrl, Message = "Institution logo updated successfully." });
+    }
+
+    [HttpPost("institutions/upload-logo")]
+    public async Task<IActionResult> UploadTempLogo([FromForm] IFormFile file)
+    {
+        if (file == null || file.Length == 0) return BadRequest("Please provide a logo file.");
+        if (file.Length > 5 * 1024 * 1024) return BadRequest("Image size must be 5MB or less.");
+
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg" };
+        if (!allowed.Contains(ext)) return BadRequest("Invalid image format. Allowed formats are JPG, JPEG, PNG, WEBP, GIF, SVG.");
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+        var fileBytes = ms.ToArray();
+
+        var logoUrl = await _storageService.UploadImageAsync(fileBytes, file.FileName, "logos");
+
+        return Ok(new { LogoUrl = logoUrl, Message = "Logo uploaded successfully." });
     }
 
     [HttpGet("institutions")]
@@ -263,6 +308,7 @@ public class SuperAdminController : ControllerBase
                 City = i.City,
                 State = i.State,
                 Status = i.Status,
+                LogoUrl = i.LogoUrl,
                 MaxRecruiters = i.MaxRecruiters,
                 CreditBalance = (i.CreditWallet != null ? i.CreditWallet.AvailableCredits : 0) + i.Recruiters.Sum(r => r.Credits),
                 CreatedDate = i.CreatedAt

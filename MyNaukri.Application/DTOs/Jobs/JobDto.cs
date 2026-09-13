@@ -20,4 +20,11 @@ public class JobDto
     public string CompanyName { get; set; } = string.Empty;
     public bool IsPlatinum { get; set; }
     public bool IsApplied { get; set; }
+    
+    // Additional Facets & Screening
+    public string? ScreeningQuestionsJson { get; set; }
+    public string? WorkMode { get; set; }
+    public string? BoardAffiliation { get; set; }
+    public string? SubjectDepartment { get; set; }
+    public string? InstitutionLogoUrl { get; set; }
 }

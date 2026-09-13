@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 // Use appropriate localhost mapping for iOS Simulator vs Android Emulator
 // For physical devices on the same Wi-Fi, change this to your computer's IP (e.g., http://192.168.1.5:5206/api)
 // In production, this would be an environment variable (e.g. process.env.EXPO_PUBLIC_API_URL)
-const API_BASE_URL = 'https://mynaukri-backend.greendune-87ffa7a1.centralus.azurecontainerapps.io/api';
+export const API_BASE_URL = 'https://mynaukri-backend.greendune-87ffa7a1.centralus.azurecontainerapps.io/api';
 
 
 export const apiClient = axios.create({

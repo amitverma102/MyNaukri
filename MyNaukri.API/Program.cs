@@ -1,7 +1,11 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using MyNaukri.Application.Interfaces;
 using MyNaukri.Infrastructure.Authentication;
@@ -32,12 +36,73 @@ builder.Services.AddScoped<ICreditService, CreditService>();
 builder.Services.AddScoped<IInstitutionCreditService, InstitutionCreditService>();
 builder.Services.AddScoped<ICreditLedgerService, CreditLedgerService>();
 builder.Services.AddScoped<IRazorpayService, MyNaukri.Infrastructure.Services.Payment.RazorpayService>();
+builder.Services.AddScoped<ICalendarInviteService, CalendarInviteService>();
+builder.Services.AddScoped<IPushNotificationService, ExpoPushNotificationService>();
+builder.Services.AddSingleton<IVideoVerificationQueue, VideoVerificationQueue>();
+builder.Services.AddScoped<IVideoVerificationService, GeminiVideoVerificationService>();
+builder.Services.AddHostedService<VideoVerificationBackgroundService>();
 builder.Services.Configure<MyNaukri.Infrastructure.Services.Payment.RazorpaySettings>(builder.Configuration.GetSection("Razorpay"));
 builder.Services.Configure<MyNaukri.Infrastructure.Services.Email.EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
 builder.Services.Configure<AzureBlobStorageSettings>(builder.Configuration.GetSection("AzureBlobStorage"));
 builder.Services.AddHostedService<ExpireCreditsJob>();
 builder.Services.AddHostedService<DailyJobMatchEmailBackgroundService>();
 builder.Services.AddHostedService<DailyCreditActivityReportBackgroundService>();
+
+// Configure Health Checks for Liveness and Readiness Probes
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("Database");
+
+// Configure ASP.NET Core Rate Limiter
+builder.Services.AddRateLimiter(rateLimiterOptions =>
+{
+    rateLimiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    rateLimiterOptions.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsync(
+            "{\"type\": \"https://tools.ietf.org/html/rfc6585#section-4\", \"title\": \"Too Many Requests\", \"status\": 429, \"detail\": \"Too many requests. Please wait a moment before trying again.\"}", 
+            token);
+    };
+
+    // Strict rate limiting on authentication and password reset (10 req/min per IP)
+    rateLimiterOptions.AddPolicy("AuthRateLimit", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    // AI Rate Limit (5 req/min per user)
+    rateLimiterOptions.AddPolicy("AiRateLimit", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User.Identity?.Name ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    // Global rate limit: 120 req/min per IP, bypassing internal health checks
+    rateLimiterOptions.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    {
+        if (httpContext.Request.Path.StartsWithSegments("/healthz") || httpContext.Request.Path.StartsWithSegments("/readyz"))
+        {
+            return RateLimitPartition.GetNoLimiter("health");
+        }
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 10
+            });
+    });
+});
 
 // Configure Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -69,18 +134,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 {
                     if (Guid.TryParse(userIdClaim, out var userId))
                     {
-                        var authLogger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
-                        var allClaims = string.Join(", ", context.Principal.Claims.Select(c => $"{c.Type}: {c.Value}"));
-                        authLogger.LogInformation("All Claims: {AllClaims}", allClaims);
-                        
                         var user = await dbContext.Users.FindAsync(userId);
                         if (user != null)
                         {
                             var currentDbSession = user.CurrentSessionId?.ToString();
                             if (currentDbSession != null && !currentDbSession.Equals(sessionIdClaim, StringComparison.OrdinalIgnoreCase))
                             {
-                                var authLogger2 = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
-                                authLogger2.LogWarning("Session invalidated. DB Session: {DbSession}, Token Session: {TokenSession}", currentDbSession, sessionIdClaim);
                                 context.Fail("Session invalidated due to new login.");
                             }
                         }
@@ -90,11 +149,31 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+// Locked-down Production CORS Policy
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", builder =>
+    options.AddPolicy("ProductionCorsPolicy", policy =>
     {
-        builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+        policy.WithOrigins(
+            "https://edukey360.com",
+            "https://www.edukey360.com",
+            "https://mynaukri-frontend.greendune-87ffa7a1.centralus.azurecontainerapps.io",
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://localhost:8081"
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .WithExposedHeaders("Content-Disposition");
+    });
+
+    // Permissive policy for mobile and external API calls where Origin is omitted
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .WithExposedHeaders("Content-Disposition");
     });
 });
 
@@ -103,11 +182,12 @@ builder.Services.AddControllers()
     {
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     });
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+// Database migration & seeding on container startup
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -115,7 +195,40 @@ using (var scope = app.Services.CreateScope())
     await SeedData.SeedJobsAsync(context);
 }
 
-// Configure the HTTP request pipeline.
+// Global Exception Handler (RFC 7807 sanitization - prevents stack trace leakage)
+app.UseExceptionHandler(exceptionApp =>
+{
+    exceptionApp.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/problem+json";
+
+        var feature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>();
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(feature?.Error, "Unhandled exception on {Path}", context.Request.Path);
+
+        var problemDetails = new
+        {
+            type = "https://tools.ietf.org/html/rfc9110#section-15.6.1",
+            title = "An error occurred while processing your request.",
+            status = StatusCodes.Status500InternalServerError,
+            traceId = context.TraceIdentifier
+        };
+
+        await context.Response.WriteAsJsonAsync(problemDetails);
+    });
+});
+
+// Production Security Headers Middleware
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("X-Frame-Options", "DENY");
+    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
+    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    await next();
+});
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -124,17 +237,47 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
-app.UseCors("AllowAll");
+// Apply production CORS
+app.UseCors("ProductionCorsPolicy");
+
+// Apply Rate Limiting
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Health Check Endpoints
+app.MapHealthChecks("/healthz", new HealthCheckOptions
+{
+    Predicate = _ => false // Liveness probe
+});
+
+app.MapHealthChecks("/readyz", new HealthCheckOptions
+{
+    Predicate = check => check.Name == "Database" // Readiness probe
+});
+
 app.MapControllers();
 
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    dbContext.Database.Migrate();
-}
-
 app.Run();
+
+public class DatabaseHealthCheck : IHealthCheck
+{
+    private readonly ApplicationDbContext _db;
+    public DatabaseHealthCheck(ApplicationDbContext db) => _db = db;
+
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var canConnect = await _db.Database.CanConnectAsync(cancellationToken);
+            return canConnect 
+                ? HealthCheckResult.Healthy("Database connection active") 
+                : HealthCheckResult.Unhealthy("Database unavailable");
+        }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy("Database connection failed", ex);
+        }
+    }
+}

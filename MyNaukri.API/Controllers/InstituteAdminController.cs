@@ -20,13 +20,20 @@ public class InstituteAdminController : ControllerBase
     private readonly IInstitutionCreditService _institutionCreditService;
     private readonly ICreditLedgerService _creditLedgerService;
     private readonly IRazorpayService _razorpayService;
+    private readonly IStorageService _storageService;
 
-    public InstituteAdminController(ApplicationDbContext context, IInstitutionCreditService institutionCreditService, ICreditLedgerService creditLedgerService, IRazorpayService razorpayService)
+    public InstituteAdminController(
+        ApplicationDbContext context, 
+        IInstitutionCreditService institutionCreditService, 
+        ICreditLedgerService creditLedgerService, 
+        IRazorpayService razorpayService,
+        IStorageService storageService)
     {
         _context = context;
         _institutionCreditService = institutionCreditService;
         _creditLedgerService = creditLedgerService;
         _razorpayService = razorpayService;
+        _storageService = storageService;
     }
 
     private async Task<Guid?> GetInstitutionIdAsync(Guid userId)
@@ -258,7 +265,7 @@ public class InstituteAdminController : ControllerBase
             .Include(t => t.Institution)
             .Include(t => t.CreatedByUser)
             .AsNoTracking()
-            .Where(t => t.InstitutionId == institutionId.Value);
+            .Where(t => t.InstitutionId == institutionId.Value && t.RecruiterId == null);
 
         if (transactionType.HasValue)
             query = query.Where(t => t.TransactionType == transactionType.Value);
@@ -310,7 +317,7 @@ public class InstituteAdminController : ControllerBase
                 BalanceBefore = t.BalanceBefore,
                 BalanceAfter = t.BalanceAfter,
                 Description = t.Description ?? string.Empty,
-                Reason = t.Reason,
+                Reason = t.Reason ?? t.Description,
                 CreatedDate = t.CreatedAt
             })
             .ToListAsync();
@@ -535,6 +542,110 @@ public class InstituteAdminController : ControllerBase
             .ToListAsync();
             
         return Ok(recruiters);
+    }
+
+    [HttpGet("recruiters/credit-transactions")]
+    public async Task<IActionResult> GetRecruiterCreditTransactions(
+        [FromQuery] Guid? recruiterId,
+        [FromQuery] string? search,
+        [FromQuery] TransactionType? transactionType,
+        [FromQuery] DateTime? fromDate,
+        [FromQuery] DateTime? toDate,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] string sortBy = "date",
+        [FromQuery] string sortDirection = "desc")
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+
+        var institutionId = await GetInstitutionIdAsync(userId);
+        if (institutionId == null) return Forbid();
+
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = _context.CreditTransactions
+            .Include(t => t.Institution)
+            .Include(t => t.Recruiter)
+                .ThenInclude(r => r!.User)
+            .Include(t => t.CreatedByUser)
+            .AsNoTracking()
+            .Where(t => t.InstitutionId == institutionId.Value && t.RecruiterId != null);
+
+        if (recruiterId.HasValue && recruiterId.Value != Guid.Empty)
+            query = query.Where(t => t.RecruiterId == recruiterId.Value);
+
+        if (transactionType.HasValue)
+            query = query.Where(t => t.TransactionType == transactionType.Value);
+
+        if (fromDate.HasValue)
+            query = query.Where(t => t.CreatedAt >= fromDate.Value.ToUniversalTime());
+
+        if (toDate.HasValue)
+        {
+            var endOfDay = toDate.Value.ToUniversalTime().AddDays(1).AddTicks(-1);
+            query = query.Where(t => t.CreatedAt <= endOfDay);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchLower = search.ToLower();
+            query = query.Where(t => 
+                t.Id.ToString().ToLower().Contains(searchLower) ||
+                (t.Recruiter != null && (
+                    t.Recruiter.User.FirstName.ToLower().Contains(searchLower) || 
+                    t.Recruiter.User.LastName.ToLower().Contains(searchLower) ||
+                    t.Recruiter.User.Email.ToLower().Contains(searchLower))) ||
+                (t.CreatedByUser != null && (
+                    t.CreatedByUser.FirstName.ToLower().Contains(searchLower) || 
+                    t.CreatedByUser.LastName.ToLower().Contains(searchLower))) ||
+                (t.Description != null && t.Description.ToLower().Contains(searchLower)) ||
+                (t.Reason != null && t.Reason.ToLower().Contains(searchLower)) ||
+                (t.ReferenceId != null && t.ReferenceId.ToLower().Contains(searchLower))
+            );
+        }
+
+        var totalRecords = await query.CountAsync();
+
+        bool isDesc = sortDirection.ToLower() == "desc";
+        query = sortBy.ToLower() switch
+        {
+            "credits" => isDesc ? query.OrderByDescending(t => t.Credits) : query.OrderBy(t => t.Credits),
+            "recruiter" => isDesc ? query.OrderByDescending(t => t.Recruiter!.User.FirstName) : query.OrderBy(t => t.Recruiter!.User.FirstName),
+            "transactiontype" => isDesc ? query.OrderByDescending(t => t.TransactionType) : query.OrderBy(t => t.TransactionType),
+            _ => isDesc ? query.OrderByDescending(t => t.CreatedAt) : query.OrderBy(t => t.CreatedAt)
+        };
+
+        var transactions = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(t => new CreditTransactionDto
+            {
+                TransactionId = $"TXN-{t.Id.ToString().Substring(0, 8).ToUpper()}",
+                InstitutionId = t.InstitutionId,
+                InstitutionName = t.Institution.Name,
+                RecruiterId = t.RecruiterId,
+                RecruiterName = t.Recruiter != null ? $"{t.Recruiter.User.FirstName} {t.Recruiter.User.LastName}".Trim() : string.Empty,
+                RecruiterEmail = t.Recruiter != null ? t.Recruiter.User.Email : string.Empty,
+                UserId = t.CreatedByUserId,
+                UserName = t.CreatedByUser != null ? $"{t.CreatedByUser.FirstName} {t.CreatedByUser.LastName}".Trim() : string.Empty,
+                TransactionType = t.TransactionType.ToString(),
+                Credits = t.Credits,
+                BalanceBefore = t.BalanceBefore,
+                BalanceAfter = t.BalanceAfter,
+                Description = t.Description ?? string.Empty,
+                Reason = t.Reason ?? t.Description,
+                CreatedDate = t.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(new PaginatedResultDto<CreditTransactionDto>
+        {
+            Items = transactions,
+            Page = page,
+            PageSize = pageSize,
+            TotalRecords = totalRecords
+        });
     }
 
     [HttpPost("recruiters/{recruiterId}/allocate")]
@@ -797,6 +908,112 @@ public class InstituteAdminController : ControllerBase
             return StatusCode(500, "An error occurred while reactivating the recruiter.");
         }
     }
+
+    [HttpGet("institution")]
+    public async Task<IActionResult> GetInstitutionProfile()
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+
+        var institutionId = await GetInstitutionIdAsync(userId);
+        if (institutionId == null) return Forbid("User is not associated with any institution.");
+
+        var institution = await _context.Institutions
+            .Include(i => i.CreditWallet)
+            .Include(i => i.Recruiters)
+            .FirstOrDefaultAsync(i => i.Id == institutionId.Value);
+
+        if (institution == null) return NotFound("Institution not found.");
+
+        var balance = (institution.CreditWallet?.AvailableCredits ?? 0) + institution.Recruiters.Sum(r => r.Credits);
+
+        return Ok(new
+        {
+            institution.Id,
+            institution.Name,
+            institution.Code,
+            Type = institution.Type.ToString(),
+            institution.LogoUrl,
+            institution.Website,
+            institution.Address,
+            institution.City,
+            institution.State,
+            institution.Country,
+            institution.PINCode,
+            institution.Email,
+            institution.Phone,
+            institution.MaxRecruiters,
+            CreditBalance = balance,
+            Status = institution.Status.ToString()
+        });
+    }
+
+    [HttpPut("institution")]
+    public async Task<IActionResult> UpdateInstitutionProfile([FromBody] UpdateInstitutionProfileDto dto)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+
+        var institutionId = await GetInstitutionIdAsync(userId);
+        if (institutionId == null) return Forbid("User is not associated with any institution.");
+
+        var institution = await _context.Institutions.FindAsync(institutionId.Value);
+        if (institution == null) return NotFound("Institution not found.");
+
+        if (dto.Website != null) institution.Website = dto.Website;
+        if (dto.Address != null) institution.Address = dto.Address;
+        if (dto.City != null) institution.City = dto.City;
+        if (dto.State != null) institution.State = dto.State;
+        if (dto.PINCode != null) institution.PINCode = dto.PINCode;
+        if (dto.Email != null) institution.Email = dto.Email;
+        if (dto.Phone != null) institution.Phone = dto.Phone;
+        if (dto.LogoUrl != null) institution.LogoUrl = dto.LogoUrl;
+
+        await _context.SaveChangesAsync();
+        return Ok(new { message = "Institution updated successfully.", institution.LogoUrl });
+    }
+
+    [HttpPost("institution/logo")]
+    public async Task<IActionResult> UploadInstitutionLogo([FromForm] IFormFile file)
+    {
+        if (file == null || file.Length == 0) return BadRequest("Please provide a logo image file.");
+        if (file.Length > 5 * 1024 * 1024) return BadRequest("Image size must be 5MB or less.");
+
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg" };
+        if (!allowed.Contains(ext)) return BadRequest("Invalid image format. Allowed formats are JPG, JPEG, PNG, WEBP, GIF, SVG.");
+
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+
+        var institutionId = await GetInstitutionIdAsync(userId);
+        if (institutionId == null) return Forbid("User is not associated with any institution.");
+
+        var institution = await _context.Institutions.FindAsync(institutionId.Value);
+        if (institution == null) return NotFound("Institution not found.");
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+        var fileBytes = ms.ToArray();
+
+        var logoUrl = await _storageService.UploadImageAsync(fileBytes, file.FileName, "logos");
+        institution.LogoUrl = logoUrl;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { LogoUrl = logoUrl, message = "Logo uploaded successfully." });
+    }
+}
+
+public class UpdateInstitutionProfileDto
+{
+    public string? Website { get; set; }
+    public string? Address { get; set; }
+    public string? City { get; set; }
+    public string? State { get; set; }
+    public string? PINCode { get; set; }
+    public string? Email { get; set; }
+    public string? Phone { get; set; }
+    public string? LogoUrl { get; set; }
 }
 
 public class CreateRecruiterDto

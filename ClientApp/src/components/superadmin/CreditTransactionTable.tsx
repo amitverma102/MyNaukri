@@ -5,6 +5,7 @@ import {
   FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 import api from '../../api/axios';
+import { formatDateTime } from '../../utils/dateUtils';
 
 interface CreditTransaction {
   transactionId: string;
@@ -248,7 +249,7 @@ const CreditTransactionTable: React.FC<CreditTransactionTableProps> = ({
             {transactions.map((tx) => (
               <TableRow key={tx.transactionId}>
                 <TableCell>{tx.transactionId}</TableCell>
-                <TableCell>{new Date(tx.createdDate).toLocaleString()}</TableCell>
+                <TableCell>{formatDateTime(tx.createdDate)}</TableCell>
                 {!hideInstitutionColumn && <TableCell>{tx.institutionName}</TableCell>}
                 <TableCell>{tx.userName}</TableCell>
                 <TableCell>{tx.transactionType}</TableCell>

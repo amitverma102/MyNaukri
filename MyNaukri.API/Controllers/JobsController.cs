@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyNaukri.Application.DTOs.Jobs;
 using MyNaukri.Application.Interfaces;
 using MyNaukri.Domain.Entities;
 using MyNaukri.Infrastructure.Data;
+using System.IO;
 using System.Security.Claims;
 
 namespace MyNaukri.API.Controllers;
@@ -43,6 +45,35 @@ public class JobsController : ControllerBase
         var jobs = await _searchService.SearchJobsAsync("", candidateId);
 
         return Ok(jobs);
+    }
+
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
+    [HttpPost("parse-jd")]
+    public async Task<ActionResult<ParsedJobDescriptionDto>> ParseJobDescription(IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest("Please upload a valid Job Description file.");
+        }
+
+        var allowedExtensions = new[] { ".pdf", ".docx", ".doc", ".txt" };
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(extension))
+        {
+            return BadRequest("Unsupported file type. Please upload a PDF, Word (.docx, .doc), or text (.txt) document.");
+        }
+
+        if (file.Length > 10 * 1024 * 1024)
+        {
+            return BadRequest("File size exceeds 10MB limit.");
+        }
+
+        using var memoryStream = new MemoryStream();
+        await file.CopyToAsync(memoryStream);
+        var fileBytes = memoryStream.ToArray();
+
+        var parsed = await _aiService.ParseJobDescriptionAsync(fileBytes, file.FileName);
+        return Ok(parsed);
     }
 
     [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
@@ -97,7 +128,11 @@ public class JobsController : ControllerBase
             RecruiterId = recruiter.Id,
             InstitutionId = recruiter.InstitutionId,
             Keywords = jobDto.Keywords,
-            IsPlatinum = jobDto.IsPlatinum
+            IsPlatinum = jobDto.IsPlatinum,
+            ScreeningQuestionsJson = jobDto.ScreeningQuestionsJson,
+            WorkMode = jobDto.WorkMode,
+            BoardAffiliation = jobDto.BoardAffiliation,
+            SubjectDepartment = jobDto.SubjectDepartment
         };
 
         _context.Jobs.Add(job);
@@ -124,6 +159,34 @@ public class JobsController : ControllerBase
         
         return Ok(recommendations);
     }
+
+    [HttpGet("{jobId}/ai-match")]
+    [Authorize(Roles = "Candidate")]
+    public async Task<ActionResult<JobResumeComparisonDto>> GetJobAiMatch(Guid jobId)
+    {
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var userId)) return Unauthorized();
+
+        var candidate = await _context.Candidates.FirstOrDefaultAsync(c => c.UserId == userId);
+        if (candidate == null) return NotFound("Candidate profile not found.");
+
+        var comparison = await _aiService.CompareResumeWithJobAsync(candidate.Id, jobId);
+        return Ok(comparison);
+    }
+
+    [HttpPost("{jobId}/ai-tailor-resume")]
+    [Authorize(Roles = "Candidate")]
+    public async Task<ActionResult<TailoredResumeDto>> TailorResumeForJob(Guid jobId)
+    {
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var userId)) return Unauthorized();
+
+        var candidate = await _context.Candidates.FirstOrDefaultAsync(c => c.UserId == userId);
+        if (candidate == null) return NotFound("Candidate profile not found.");
+
+        var tailored = await _aiService.TailorResumeForJobAsync(candidate.Id, jobId);
+        return Ok(tailored);
+    }
     [HttpGet("search")]
     public async Task<ActionResult<IEnumerable<JobDto>>> SearchJobs([FromQuery] string query)
     {
@@ -144,6 +207,25 @@ public class JobsController : ControllerBase
         }
 
         var results = await _searchService.SearchJobsAsync(query, candidateId);
+        return Ok(results);
+    }
+
+    [HttpGet("search-advanced")]
+    [AllowAnonymous]
+    public async Task<ActionResult<MyNaukri.Application.DTOs.SuperAdmin.PaginatedResultDto<JobDto>>> SearchJobsAdvanced([FromQuery] JobSearchQueryDto request)
+    {
+        Guid? candidateId = null;
+        if (User.Identity?.IsAuthenticated == true && User.IsInRole("Candidate"))
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (Guid.TryParse(userIdStr, out var userId))
+            {
+                var candidate = await _context.Candidates.FirstOrDefaultAsync(c => c.UserId == userId);
+                if (candidate != null) candidateId = candidate.Id;
+            }
+        }
+
+        var results = await _searchService.SearchJobsAdvancedAsync(request, candidateId);
         return Ok(results);
     }
 
@@ -175,7 +257,8 @@ public class JobsController : ControllerBase
                 CreatedAt = j.CreatedAt,
                 IsActive = j.IsActive,
                 CompanyName = j.Institution.Name,
-                Keywords = j.Keywords
+                Keywords = j.Keywords,
+                InstitutionLogoUrl = j.Institution != null ? j.Institution.LogoUrl : null
             })
             .ToListAsync();
 
@@ -188,16 +271,18 @@ public class JobsController : ControllerBase
     {
         var topInstitutions = await _context.Jobs
             .Include(j => j.Institution)
-            .Where(j => j.IsActive)
-            .GroupBy(j => j.Institution)
+            .Where(j => j.IsActive && j.Institution != null && !string.IsNullOrEmpty(j.Institution.Name))
+            .GroupBy(j => new { j.Institution.Id, j.Institution.Name, j.Institution.City, j.Institution.LogoUrl })
             .Select(g => new 
             {
                 InstitutionId = g.Key.Id,
                 InstitutionName = g.Key.Name,
+                City = g.Key.City,
+                LogoUrl = g.Key.LogoUrl,
                 JobCount = g.Count()
             })
             .OrderByDescending(x => x.JobCount)
-            .Take(4)
+            .Take(8)
             .ToListAsync();
 
         return Ok(topInstitutions);
@@ -224,9 +309,68 @@ public class JobsController : ControllerBase
         job.JobType = jobDto.JobType;
         job.Location = jobDto.Location;
         job.Keywords = jobDto.Keywords;
+        if (!string.IsNullOrEmpty(jobDto.WorkMode)) job.WorkMode = jobDto.WorkMode;
+        if (!string.IsNullOrEmpty(jobDto.BoardAffiliation)) job.BoardAffiliation = jobDto.BoardAffiliation;
+        if (!string.IsNullOrEmpty(jobDto.SubjectDepartment)) job.SubjectDepartment = jobDto.SubjectDepartment;
+        if (!string.IsNullOrEmpty(jobDto.ScreeningQuestionsJson)) job.ScreeningQuestionsJson = jobDto.ScreeningQuestionsJson;
 
         await _context.SaveChangesAsync();
         return NoContent();
+    }
+
+    [HttpGet("institution/{institutionId}")]
+    [AllowAnonymous]
+    public async Task<ActionResult> GetInstitutionShowcase(Guid institutionId)
+    {
+        var institution = await _context.Institutions
+            .FirstOrDefaultAsync(i => i.Id == institutionId);
+
+        if (institution == null) return NotFound("Institution not found.");
+
+        var activeJobs = await _context.Jobs
+            .Where(j => j.InstitutionId == institutionId && j.IsActive)
+            .OrderByDescending(j => j.CreatedAt)
+            .Select(j => new JobDto
+            {
+                Id = j.Id,
+                Title = j.Title,
+                Description = j.Description,
+                Requirements = j.Requirements,
+                MinSalary = j.MinSalary,
+                MaxSalary = j.MaxSalary,
+                JobType = j.JobType,
+                Location = j.Location,
+                RecruiterId = j.RecruiterId,
+                InstitutionId = j.InstitutionId,
+                CreatedAt = j.CreatedAt,
+                IsActive = j.IsActive,
+                CompanyName = institution.Name,
+                Keywords = j.Keywords,
+                IsPlatinum = j.IsPlatinum,
+                WorkMode = j.WorkMode,
+                BoardAffiliation = j.BoardAffiliation,
+                SubjectDepartment = j.SubjectDepartment,
+                InstitutionLogoUrl = institution.LogoUrl
+            })
+            .ToListAsync();
+
+        return Ok(new
+        {
+            Id = institution.Id,
+            Name = institution.Name,
+            Code = institution.Code,
+            Type = institution.Type.ToString(),
+            LogoUrl = institution.LogoUrl,
+            Address = institution.Address,
+            City = institution.City,
+            State = institution.State,
+            PINCode = institution.PINCode,
+            Email = institution.Email,
+            Phone = institution.Phone,
+            Website = institution.Website,
+            Description = institution.Description,
+            ActiveJobs = activeJobs
+        });
     }
 
     [HttpPatch("{id}/close")]

@@ -17,14 +17,22 @@ public class CandidatesController : ControllerBase
     private readonly IStorageService _storageService;
     private readonly ICreditService _creditService;
     private readonly ISearchService _searchService;
+    private readonly IVideoVerificationQueue _videoQueue;
 
-    public CandidatesController(ApplicationDbContext context, IAiService aiService, IStorageService storageService, ICreditService creditService, ISearchService searchService)
+    public CandidatesController(
+        ApplicationDbContext context,
+        IAiService aiService,
+        IStorageService storageService,
+        ICreditService creditService,
+        ISearchService searchService,
+        IVideoVerificationQueue videoQueue)
     {
         _context = context;
         _aiService = aiService;
         _storageService = storageService;
         _creditService = creditService;
         _searchService = searchService;
+        _videoQueue = videoQueue;
     }
 
     [HttpGet("profile")]
@@ -51,6 +59,7 @@ public class CandidatesController : ControllerBase
                 Email = user.Email,
                 PhoneNumber = "",
                 ResumeUrl = "",
+                ProfilePictureUrl = user.ProfilePictureUrl,
                 Skills = "",
                 Summary = "",
                 TotalExperienceYears = 0,
@@ -75,6 +84,7 @@ public class CandidatesController : ControllerBase
             Email = candidate.User.Email,
             PhoneNumber = candidate.PhoneNumber,
             ResumeUrl = candidate.ResumeUrl,
+            ProfilePictureUrl = !string.IsNullOrEmpty(candidate.ProfilePictureUrl) ? candidate.ProfilePictureUrl : candidate.User.ProfilePictureUrl,
             Skills = candidate.Skills,
             Summary = candidate.Summary,
             TotalExperienceYears = candidate.TotalExperienceYears,
@@ -87,7 +97,18 @@ public class CandidatesController : ControllerBase
             BoardsTaught = candidate.BoardsTaught,
             Education = candidate.Education,
             Certifications = candidate.Certifications,
-            IsSubscribedToJobAlerts = candidate.IsSubscribedToJobAlerts
+            IsSubscribedToJobAlerts = candidate.IsSubscribedToJobAlerts,
+            DemoVideoUrl = candidate.DemoVideoUrl,
+            DemoVideoStatus = candidate.DemoVideoStatus.ToString(),
+            DemoVideoSubject = candidate.DemoVideoSubject,
+            DemoVideoSummary = candidate.DemoVideoSummary,
+            DemoVideoRejectionReason = candidate.DemoVideoRejectionReason,
+            DemoVideoVerifiedAt = candidate.DemoVideoVerifiedAt,
+            IsCtetQualified = candidate.IsCtetQualified,
+            CtetDetails = candidate.CtetDetails,
+            CurrentInstitution = candidate.CurrentInstitution,
+            BlockedInstitutions = candidate.BlockedInstitutions,
+            JoiningAvailability = candidate.JoiningAvailability
         });
     }
 
@@ -99,6 +120,7 @@ public class CandidatesController : ControllerBase
         if (!Guid.TryParse(userIdString, out var userId)) return Unauthorized();
 
         var candidate = await _context.Candidates.FirstOrDefaultAsync(c => c.UserId == userId);
+        bool videoChanged = false;
         
         if (candidate == null)
         {
@@ -119,9 +141,29 @@ public class CandidatesController : ControllerBase
                 BoardsTaught = request.BoardsTaught ?? "",
                 Education = request.Education ?? "",
                 Certifications = request.Certifications ?? "",
-                IsSubscribedToJobAlerts = request.IsSubscribedToJobAlerts ?? true
+                IsSubscribedToJobAlerts = request.IsSubscribedToJobAlerts ?? true,
+                DemoVideoUrl = request.DemoVideoUrl,
+                DemoVideoStatus = !string.IsNullOrWhiteSpace(request.DemoVideoUrl) 
+                    ? MyNaukri.Domain.Enums.VideoVerificationStatus.Pending 
+                    : MyNaukri.Domain.Enums.VideoVerificationStatus.Unverified,
+                IsCtetQualified = request.IsCtetQualified,
+                CtetDetails = request.CtetDetails,
+                CurrentInstitution = request.CurrentInstitution,
+                BlockedInstitutions = request.BlockedInstitutions,
+                JoiningAvailability = request.JoiningAvailability,
+                ProfilePictureUrl = request.ProfilePictureUrl ?? ""
             };
+            if (!string.IsNullOrWhiteSpace(request.DemoVideoUrl))
+            {
+                videoChanged = true;
+            }
             _context.Candidates.Add(candidate);
+
+            if (!string.IsNullOrWhiteSpace(request.ProfilePictureUrl))
+            {
+                var user = await _context.Users.FindAsync(userId);
+                if (user != null) user.ProfilePictureUrl = request.ProfilePictureUrl;
+            }
         }
         else
         {
@@ -138,14 +180,126 @@ public class CandidatesController : ControllerBase
             candidate.BoardsTaught = request.BoardsTaught ?? candidate.BoardsTaught;
             candidate.Education = request.Education ?? candidate.Education;
             candidate.Certifications = request.Certifications ?? candidate.Certifications;
+            if (request.ProfilePictureUrl != null)
+            {
+                candidate.ProfilePictureUrl = request.ProfilePictureUrl;
+                var user = await _context.Users.FindAsync(userId);
+                if (user != null) user.ProfilePictureUrl = request.ProfilePictureUrl;
+            }
+            if (request.DemoVideoUrl != null && !string.Equals(request.DemoVideoUrl, candidate.DemoVideoUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                candidate.DemoVideoUrl = request.DemoVideoUrl;
+                candidate.DemoVideoStatus = MyNaukri.Domain.Enums.VideoVerificationStatus.Pending;
+                candidate.DemoVideoSubject = null;
+                candidate.DemoVideoSummary = null;
+                candidate.DemoVideoRejectionReason = null;
+                videoChanged = true;
+            }
+            if (request.IsCtetQualified.HasValue) candidate.IsCtetQualified = request.IsCtetQualified.Value;
+            if (request.CtetDetails != null) candidate.CtetDetails = request.CtetDetails;
+            if (request.CurrentInstitution != null) candidate.CurrentInstitution = request.CurrentInstitution;
+            if (request.BlockedInstitutions != null) candidate.BlockedInstitutions = request.BlockedInstitutions;
+            if (request.JoiningAvailability != null) candidate.JoiningAvailability = request.JoiningAvailability;
             if (request.IsSubscribedToJobAlerts.HasValue) 
             {
                 candidate.IsSubscribedToJobAlerts = request.IsSubscribedToJobAlerts.Value;
             }
+            candidate.UpdatedAt = DateTime.UtcNow;
         }
 
         await _context.SaveChangesAsync();
+
+        if (videoChanged && !string.IsNullOrWhiteSpace(candidate.DemoVideoUrl))
+        {
+            await _videoQueue.EnqueueAsync(candidate.Id);
+        }
+
         return Ok(new { Message = "Profile updated successfully." });
+    }
+
+    [HttpPost("profile-picture")]
+    [Authorize(Roles = "Candidate")]
+    public async Task<ActionResult> UploadCandidateProfilePicture([FromForm] IFormFile file)
+    {
+        if (file == null || file.Length == 0) return BadRequest("Please provide an image file.");
+        if (file.Length > 5 * 1024 * 1024) return BadRequest("Image size must be 5MB or less.");
+
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg" };
+        if (!allowed.Contains(ext)) return BadRequest("Invalid image format. Allowed formats are JPG, JPEG, PNG, WEBP, GIF, SVG.");
+
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var userId)) return Unauthorized();
+
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null) return Unauthorized();
+
+        var candidate = await _context.Candidates.FirstOrDefaultAsync(c => c.UserId == userId);
+        if (candidate == null)
+        {
+            candidate = new MyNaukri.Domain.Entities.Candidate
+            {
+                UserId = userId,
+                PhoneNumber = "",
+                Skills = "",
+                Summary = "",
+                TotalExperienceYears = 0,
+                IsSubscribedToJobAlerts = true
+            };
+            _context.Candidates.Add(candidate);
+            await _context.SaveChangesAsync();
+        }
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+        var fileBytes = ms.ToArray();
+
+        var pictureUrl = await _storageService.UploadImageAsync(fileBytes, file.FileName, "profiles");
+        user.ProfilePictureUrl = pictureUrl;
+        candidate.ProfilePictureUrl = pictureUrl;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { ProfilePictureUrl = pictureUrl, Message = "Profile picture updated successfully." });
+    }
+
+    public class SaveSummaryRequest
+    {
+        public string Summary { get; set; } = string.Empty;
+    }
+
+    [HttpPost("profile/save-tailored-summary")]
+    [Authorize(Roles = "Candidate")]
+    public async Task<ActionResult> SaveTailoredSummary([FromBody] SaveSummaryRequest request)
+    {
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var userId)) return Unauthorized();
+
+        var candidate = await _context.Candidates.FirstOrDefaultAsync(c => c.UserId == userId);
+        if (candidate == null) return NotFound("Candidate profile not found.");
+
+        candidate.Summary = request.Summary ?? string.Empty;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { Message = "Tailored summary saved to profile successfully." });
+    }
+
+    [HttpPost("verify-demo-video")]
+    [Authorize(Roles = "Candidate")]
+    public async Task<ActionResult> ReverifyDemoVideo()
+    {
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var userId)) return Unauthorized();
+
+        var candidate = await _context.Candidates.FirstOrDefaultAsync(c => c.UserId == userId);
+        if (candidate == null) return NotFound("Candidate profile not found.");
+        if (string.IsNullOrWhiteSpace(candidate.DemoVideoUrl)) return BadRequest("No demo video URL to verify.");
+
+        candidate.DemoVideoStatus = MyNaukri.Domain.Enums.VideoVerificationStatus.Pending;
+        candidate.DemoVideoRejectionReason = null;
+        await _context.SaveChangesAsync();
+
+        await _videoQueue.EnqueueAsync(candidate.Id);
+        return Ok(new { Message = "Video verification queued successfully." });
     }
     [HttpPost("parse-resume")]
     [Authorize(Roles = "Candidate")]
@@ -193,6 +347,7 @@ public class CandidatesController : ControllerBase
         candidate.BoardsTaught = string.IsNullOrEmpty(candidate.BoardsTaught) ? parsedData.BoardsTaught : candidate.BoardsTaught;
         candidate.Education = string.IsNullOrEmpty(candidate.Education) ? parsedData.Education : candidate.Education;
         candidate.Certifications = string.IsNullOrEmpty(candidate.Certifications) ? parsedData.Certifications : candidate.Certifications;
+        candidate.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
         

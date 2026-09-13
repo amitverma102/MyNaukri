@@ -27,6 +27,18 @@ public class MockSearchService : ISearchService
         return Task.FromResult<IEnumerable<JobDto>>(results);
     }
 
+    public Task<MyNaukri.Application.DTOs.SuperAdmin.PaginatedResultDto<JobDto>> SearchJobsAdvancedAsync(JobSearchQueryDto request, Guid? candidateId = null)
+    {
+        var list = new List<JobDto>();
+        return Task.FromResult(new MyNaukri.Application.DTOs.SuperAdmin.PaginatedResultDto<JobDto>
+        {
+            Items = list,
+            Page = request.Page,
+            PageSize = request.PageSize,
+            TotalRecords = 0
+        });
+    }
+
     public Task<IEnumerable<MyNaukri.Application.DTOs.Candidates.CandidateSearchResultDto>> SearchCandidatesAsync(MyNaukri.Application.DTOs.Candidates.CandidateSearchRequestDto request)
     {
         return Task.FromResult<IEnumerable<MyNaukri.Application.DTOs.Candidates.CandidateSearchResultDto>>(new List<MyNaukri.Application.DTOs.Candidates.CandidateSearchResultDto>());

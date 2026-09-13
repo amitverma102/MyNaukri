@@ -23,5 +23,11 @@ public class Job : BaseEntity
     
     public bool IsPlatinum { get; set; }
     
+    // Search facets & Screening
+    public string? ScreeningQuestionsJson { get; set; }
+    public string? WorkMode { get; set; }
+    public string? BoardAffiliation { get; set; }
+    public string? SubjectDepartment { get; set; }
+    
     public ICollection<JobApplication> Applications { get; set; } = new List<JobApplication>();
 }

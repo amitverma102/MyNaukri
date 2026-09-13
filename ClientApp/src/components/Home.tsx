@@ -1,7 +1,7 @@
-import { Box, Typography, Button, TextField, Grid, Card, CardContent, InputAdornment, Chip, CircularProgress } from '@mui/material';
+import { Box, Typography, Button, TextField, Grid, Card, CardContent, InputAdornment, Chip, CircularProgress, Avatar } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import api from '../api/axios';
+import api, { getMediaUrl } from '../api/axios';
 import SearchIcon from '@mui/icons-material/Search';
 
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
@@ -123,14 +123,74 @@ export default function Home() {
           <Grid container spacing={3}>
             {topInstitutions.map((inst: any) => (
               <Grid size={{ xs: 12, sm: 6, md: 3 }} key={inst.institutionId}>
-                <Card variant="outlined" sx={{ borderRadius: 3, height: '100%', cursor: 'pointer', '&:hover': { boxShadow: '0px 4px 15px rgba(0,0,0,0.1)' } }} onClick={() => navigate('/jobs', { state: { companyName: inst.institutionName } })}>
-                  <CardContent>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{inst.institutionName}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{inst.jobCount} {inst.jobCount === 1 ? 'job' : 'jobs'} available</Typography>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Box sx={{ width: 40, height: 40, bgcolor: '#f0f0f0', borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 'bold', color: '#555' }}>
-                        {inst.institutionName.substring(0, 3).toUpperCase()}
+                <Card 
+                  variant="outlined" 
+                  sx={{ 
+                    borderRadius: 3, 
+                    height: '100%', 
+                    cursor: 'pointer', 
+                    transition: 'all 0.2s ease-in-out',
+                    borderColor: '#e2e8f0',
+                    '&:hover': { 
+                      boxShadow: '0px 6px 20px rgba(0,0,0,0.08)',
+                      transform: 'translateY(-2px)',
+                      borderColor: 'primary.main'
+                    } 
+                  }} 
+                  onClick={() => navigate('/jobs', { state: { companyName: inst.institutionName } })}
+                >
+                  <CardContent sx={{ p: 2.5, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+                    <Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+                        <Avatar
+                          src={getMediaUrl(inst.logoUrl)}
+                          variant="rounded"
+                          sx={{
+                            width: 50,
+                            height: 50,
+                            bgcolor: '#ffffff',
+                            border: '1px solid #e2e8f0',
+                            p: 0.5,
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                            '& img': { objectFit: 'contain' }
+                          }}
+                        >
+                          <SchoolIcon sx={{ color: 'primary.main', fontSize: 28 }} />
+                        </Avatar>
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography 
+                            variant="subtitle1" 
+                            sx={{ 
+                              fontWeight: 700, 
+                              lineHeight: 1.25, 
+                              overflow: 'hidden', 
+                              textOverflow: 'ellipsis', 
+                              whiteSpace: 'nowrap' 
+                            }}
+                            title={inst.institutionName}
+                          >
+                            {inst.institutionName}
+                          </Typography>
+                          {inst.city && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.3 }}>
+                              📍 {inst.city}
+                            </Typography>
+                          )}
+                        </Box>
                       </Box>
+                    </Box>
+
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, pt: 1, borderTop: '1px solid #f1f5f9' }}>
+                      <Chip 
+                        label={`${inst.jobCount} ${inst.jobCount === 1 ? 'opening' : 'openings'}`} 
+                        size="small" 
+                        color="primary" 
+                        variant="outlined" 
+                        sx={{ fontWeight: 600, fontSize: '0.75rem', height: 24 }} 
+                      />
+                      <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                        View Jobs →
+                      </Typography>
                     </Box>
                   </CardContent>
                 </Card>
