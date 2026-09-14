@@ -43,4 +43,9 @@ public class MockSearchService : ISearchService
     {
         return Task.FromResult<IEnumerable<MyNaukri.Application.DTOs.Candidates.CandidateSearchResultDto>>(new List<MyNaukri.Application.DTOs.Candidates.CandidateSearchResultDto>());
     }
+
+    public Task<IEnumerable<MyNaukri.Application.DTOs.Candidates.CandidateSearchResultDto>> GetAiMatchedCandidatesForJobAsync(Guid jobId, Guid? recruiterId = null)
+    {
+        return Task.FromResult<IEnumerable<MyNaukri.Application.DTOs.Candidates.CandidateSearchResultDto>>(new List<MyNaukri.Application.DTOs.Candidates.CandidateSearchResultDto>());
+    }
 }

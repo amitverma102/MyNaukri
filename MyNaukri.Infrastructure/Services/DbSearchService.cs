@@ -646,4 +646,114 @@ public class DbSearchService : ISearchService
         var lambda = System.Linq.Expressions.Expression.Lambda<Func<Candidate, bool>>(combined!, parameter);
         return query.Where(lambda);
     }
+
+    public async Task<IEnumerable<CandidateSearchResultDto>> GetAiMatchedCandidatesForJobAsync(Guid jobId, Guid? recruiterId = null)
+    {
+        var job = await _context.Jobs
+            .Include(j => j.Institution)
+            .FirstOrDefaultAsync(j => j.Id == jobId);
+
+        if (job == null)
+        {
+            return Enumerable.Empty<CandidateSearchResultDto>();
+        }
+
+        // Build candidate search request from job parameters
+        var keywordsList = new List<string>();
+        if (!string.IsNullOrWhiteSpace(job.Title)) keywordsList.Add(job.Title);
+        if (!string.IsNullOrWhiteSpace(job.Keywords)) keywordsList.Add(job.Keywords);
+        if (!string.IsNullOrWhiteSpace(job.SubjectDepartment)) keywordsList.Add(job.SubjectDepartment);
+
+        var searchRequest = new CandidateSearchRequestDto
+        {
+            Keyword = string.Join(", ", keywordsList),
+            Location = job.Location ?? string.Empty,
+            BoardsTaught = job.BoardAffiliation,
+            ClassesTaught = job.SubjectDepartment,
+            SortBy = "aiMatch"
+        };
+
+        var candidates = await _context.Candidates
+            .Include(c => c.User)
+            .ToListAsync();
+
+        if (!candidates.Any())
+        {
+            return Enumerable.Empty<CandidateSearchResultDto>();
+        }
+
+        var candidateIds = candidates.Select(c => c.Id).ToList();
+        Dictionary<Guid, CandidateContactAccess> accesses = new();
+        if (recruiterId.HasValue)
+        {
+            accesses = await _context.CandidateContactAccesses
+                .Where(a => a.RecruiterId == recruiterId.Value && candidateIds.Contains(a.CandidateId))
+                .ToDictionaryAsync(a => a.CandidateId);
+        }
+
+        var dtoList = candidates.Select(c =>
+        {
+            var (aiScore, aiReason) = CalculateAiRecommendation(c, searchRequest);
+
+            bool hasUnlockedContact = accesses.TryGetValue(c.Id, out var access) && access.HasUnlockedContact;
+            bool hasDownloadedResume = access != null && access.HasDownloadedResume;
+
+            return new CandidateSearchResultDto
+            {
+                Id = c.Id,
+                FirstName = hasUnlockedContact ? c.User.FirstName : (string.IsNullOrEmpty(c.User.FirstName) ? "Candidate" : c.User.FirstName.Substring(0, 1) + "***"),
+                LastName = hasUnlockedContact ? c.User.LastName : (string.IsNullOrEmpty(c.User.LastName) ? "" : c.User.LastName.Substring(0, 1) + "***"),
+                Email = hasUnlockedContact ? c.User.Email : MaskEmail(c.User.Email),
+                PhoneNumber = hasUnlockedContact ? c.PhoneNumber : MaskPhone(c.PhoneNumber),
+                ResumeUrl = hasDownloadedResume ? c.ResumeUrl : null,
+                Skills = c.Skills,
+                Summary = c.Summary,
+                TotalExperienceYears = c.TotalExperienceYears,
+                CurrentLocation = c.CurrentLocation,
+                Education = c.Education,
+                Gender = c.Gender,
+                DifferentlyAbled = c.DifferentlyAbled,
+                ExServiceman = c.ExServiceman,
+                ExServicemanBranch = c.ExServicemanBranch,
+                NoticePeriod = c.NoticePeriod,
+                ClassesTaught = c.ClassesTaught,
+                BoardsTaught = c.BoardsTaught,
+                IsCtetQualified = c.IsCtetQualified,
+                DemoVideoUrl = c.DemoVideoUrl,
+                DemoVideoStatus = c.DemoVideoStatus.ToString(),
+                DemoVideoSubject = c.DemoVideoSubject,
+                DemoVideoSummary = c.DemoVideoSummary,
+                JoiningAvailability = c.JoiningAvailability,
+                UpdatedAt = c.UpdatedAt ?? c.CreatedAt,
+                HasUnlockedContact = hasUnlockedContact,
+                HasDownloadedResume = hasDownloadedResume,
+                AiRecommendationScore = aiScore,
+                AiRecommendationReason = aiReason
+            };
+        })
+        .OrderByDescending(c => c.AiRecommendationScore ?? 0)
+        .ThenByDescending(c => c.UpdatedAt)
+        .ToList();
+
+        return dtoList;
+    }
+
+    private static string MaskEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return string.Empty;
+        var parts = email.Split('@');
+        if (parts.Length != 2) return "***@***.***";
+        var name = parts[0];
+        var domain = parts[1];
+        var maskedName = name.Length > 1 ? name.Substring(0, 1) + "***" : "***";
+        return $"{maskedName}@{domain}";
+    }
+
+    private static string MaskPhone(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return string.Empty;
+        return phone.Length > 4 
+            ? phone.Substring(0, 2) + "******" + phone.Substring(phone.Length - 2) 
+            : "******";
+    }
 }

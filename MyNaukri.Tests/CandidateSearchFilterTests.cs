@@ -332,4 +332,112 @@ public class CandidateSearchFilterTests
             Assert.Equal("Junior", byUpdated[0].FirstName);
         }
     }
+
+    [Fact]
+    public async Task GetAiMatchedCandidatesForJobAsync_SortsByDescendingMatchScore()
+    {
+        var dbName = "JobMatchTestDb_" + Guid.NewGuid();
+        var options = CreateInMemoryOptions(dbName);
+
+        Guid jobId;
+        Guid recruiterId;
+
+        using (var context = new ApplicationDbContext(options))
+        {
+            var recruiterUser = new User { FirstName = "HR", LastName = "Admin", Email = "hr@school.com", Role = Role.Recruiter };
+            context.Users.Add(recruiterUser);
+            await context.SaveChangesAsync();
+
+            var institution = new Institution { Name = "Springdales School", City = "Delhi", State = "Delhi" };
+            context.Institutions.Add(institution);
+            await context.SaveChangesAsync();
+
+            var recruiter = new Recruiter { UserId = recruiterUser.Id, InstitutionId = institution.Id };
+            context.Recruiters.Add(recruiter);
+            await context.SaveChangesAsync();
+            recruiterId = recruiter.Id;
+
+            var job = new Job
+            {
+                Title = "PGT Physics Teacher",
+                Keywords = "Physics, Mechanics, Optics, CBSE",
+                SubjectDepartment = "Physics",
+                BoardAffiliation = "CBSE",
+                Location = "Delhi",
+                RecruiterId = recruiter.Id,
+                InstitutionId = institution.Id,
+                IsActive = true
+            };
+            context.Jobs.Add(job);
+            await context.SaveChangesAsync();
+            jobId = job.Id;
+
+            // Candidate 1: Perfect Match (Physics, CBSE, Delhi, 8 years exp, CTET)
+            var user1 = new User { FirstName = "Aarav", LastName = "Sharma", Email = "aarav@test.com", Role = Role.Candidate };
+            var cand1 = new Candidate
+            {
+                UserId = user1.Id,
+                Skills = "Physics, Mechanics, Optics",
+                BoardsTaught = "CBSE",
+                ClassesTaught = "Class 11, Class 12",
+                CurrentLocation = "Delhi",
+                TotalExperienceYears = 8,
+                IsCtetQualified = true,
+                CreatedAt = DateTime.UtcNow.AddDays(-10)
+            };
+
+            // Candidate 2: Moderate Match (Chemistry teacher in Delhi)
+            var user2 = new User { FirstName = "Bhavna", LastName = "Patel", Email = "bhavna@test.com", Role = Role.Candidate };
+            var cand2 = new Candidate
+            {
+                UserId = user2.Id,
+                Skills = "Chemistry, Biology",
+                BoardsTaught = "ICSE",
+                ClassesTaught = "Class 9, Class 10",
+                CurrentLocation = "Delhi",
+                TotalExperienceYears = 4,
+                CreatedAt = DateTime.UtcNow.AddDays(-5)
+            };
+
+            // Candidate 3: Weak/No Match (History teacher in Mumbai)
+            var user3 = new User { FirstName = "Chetan", LastName = "Verma", Email = "chetan@test.com", Role = Role.Candidate };
+            var cand3 = new Candidate
+            {
+                UserId = user3.Id,
+                Skills = "History, Geography",
+                BoardsTaught = "State Board",
+                ClassesTaught = "Class 6, Class 7",
+                CurrentLocation = "Mumbai",
+                TotalExperienceYears = 1,
+                CreatedAt = DateTime.UtcNow.AddDays(-2)
+            };
+
+            context.Users.AddRange(user1, user2, user3);
+            context.Candidates.AddRange(cand1, cand2, cand3);
+            await context.SaveChangesAsync();
+        }
+
+        using (var context = new ApplicationDbContext(options))
+        {
+            var searchService = new DbSearchService(context);
+            var matches = (await searchService.GetAiMatchedCandidatesForJobAsync(jobId, recruiterId)).ToList();
+
+            Assert.Equal(3, matches.Count);
+            
+            // Verify descending match score ordering
+            Assert.True(matches[0].AiRecommendationScore >= matches[1].AiRecommendationScore,
+                $"Expected {matches[0].AiRecommendationScore} >= {matches[1].AiRecommendationScore}");
+            Assert.True(matches[1].AiRecommendationScore >= matches[2].AiRecommendationScore,
+                $"Expected {matches[1].AiRecommendationScore} >= {matches[2].AiRecommendationScore}");
+
+            // Candidate 1 (Physics teacher) should be rank #1
+            Assert.StartsWith("A", matches[0].FirstName);
+            Assert.True(matches[0].AiRecommendationScore >= 70, $"Expected high match score for Aarav, got {matches[0].AiRecommendationScore}");
+            Assert.Contains("physics", matches[0].AiRecommendationReason, StringComparison.OrdinalIgnoreCase);
+
+            // Candidate 3 (History in Mumbai) should be rank #3 with lower score
+            Assert.StartsWith("C", matches[2].FirstName);
+            Assert.True(matches[0].AiRecommendationScore > matches[2].AiRecommendationScore);
+        }
+    }
 }

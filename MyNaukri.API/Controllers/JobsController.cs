@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyNaukri.Application.DTOs.Jobs;
+using MyNaukri.Application.DTOs.Candidates;
 using MyNaukri.Application.Interfaces;
 using MyNaukri.Domain.Entities;
 using MyNaukri.Infrastructure.Data;
@@ -263,6 +264,31 @@ public class JobsController : ControllerBase
             .ToListAsync();
 
         return Ok(jobs);
+    }
+
+    [HttpGet("{id}/matched-candidates")]
+    [Authorize(Roles = "Recruiter,CompanyHR,InstituteAdministrator,SuperAdministrator")]
+    public async Task<ActionResult<IEnumerable<CandidateSearchResultDto>>> GetAiMatchedCandidates(Guid id)
+    {
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var userId)) return Unauthorized();
+
+        var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.UserId == userId);
+        if (recruiter == null && !User.IsInRole("SuperAdministrator"))
+        {
+            return StatusCode(403, "User is not registered as a recruiter.");
+        }
+
+        var job = await _context.Jobs.FirstOrDefaultAsync(j => j.Id == id);
+        if (job == null) return NotFound("Job not found.");
+
+        if (recruiter != null && job.RecruiterId != recruiter.Id && !User.IsInRole("SuperAdministrator"))
+        {
+            return StatusCode(403, "You do not have permission to view matches for this job.");
+        }
+
+        var matchedCandidates = await _searchService.GetAiMatchedCandidatesForJobAsync(id, recruiter?.Id);
+        return Ok(matchedCandidates);
     }
 
     [HttpGet("top-institutions")]

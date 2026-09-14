@@ -170,6 +170,12 @@ export default function RecruiterDashboard() {
   const [currentJobApplicants, setCurrentJobApplicants] = useState<JobApplication[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
 
+  // AI Matched Candidates Modal state
+  const [isAiMatchesModalOpen, setIsAiMatchesModalOpen] = useState(false);
+  const [selectedJobForMatches, setSelectedJobForMatches] = useState<Job | null>(null);
+  const [aiMatchedCandidates, setAiMatchedCandidates] = useState<Candidate[]>([]);
+  const [isLoadingAiMatches, setIsLoadingAiMatches] = useState(false);
+
   // Applicant Comments state
   const [activeCommentAppId, setActiveCommentAppId] = useState<string | null>(null);
   const [appComments, setAppComments] = useState<ApplicationComment[]>([]);
@@ -295,6 +301,14 @@ export default function RecruiterDashboard() {
       alert(`Contact Unlocked!\nEmail: ${response.data.email}\nPhone: ${response.data.phoneNumber}`);
       fetchCredits(); // update balance
       handleResdexSearch(); // re-fetch search to update flags
+      setAiMatchedCandidates(prev => prev.map(c => c.id === candidateId ? {
+        ...c,
+        hasUnlockedContact: true,
+        email: response.data.email,
+        phoneNumber: response.data.phoneNumber,
+        firstName: response.data.firstName || (c.firstName ? c.firstName.replace(/\*\*\*/, '') : ''),
+        lastName: response.data.lastName || (c.lastName ? c.lastName.replace(/\*\*\*/, '') : '')
+      } : c));
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to unlock contact. Insufficient credits?");
     }
@@ -314,6 +328,7 @@ export default function RecruiterDashboard() {
       if (!candidate.hasDownloadedResume) {
         fetchCredits(); // update balance
         handleResdexSearch(); // re-fetch search to update flags
+        setAiMatchedCandidates(prev => prev.map(c => c.id === candidate.id ? { ...c, hasDownloadedResume: true } : c));
       }
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to download resume. Insufficient credits?");
@@ -435,11 +450,28 @@ export default function RecruiterDashboard() {
   const openApplicantsModal = async (jobId: string) => {
     try {
       const response = await api.get(`/jobapplications/job/${jobId}`);
-      setCurrentJobApplicants(response.data);
+      const sorted = (response.data || []).sort((a: any, b: any) => (b.aiMatchScore ?? 0) - (a.aiMatchScore ?? 0));
+      setCurrentJobApplicants(sorted);
       setSelectedJobId(jobId);
       setIsApplicantsModalOpen(true);
     } catch (err) {
       console.error('Failed to fetch applicants', err);
+    }
+  };
+
+  const openAiMatchesModal = async (job: Job) => {
+    try {
+      setSelectedJobForMatches(job);
+      setIsAiMatchesModalOpen(true);
+      setIsLoadingAiMatches(true);
+      const res = await api.get(`/jobs/${job.id}/matched-candidates`);
+      const sorted = (res.data || []).sort((a: any, b: any) => (b.aiRecommendationScore ?? 0) - (a.aiRecommendationScore ?? 0));
+      setAiMatchedCandidates(sorted);
+    } catch (err) {
+      console.error('Failed to fetch AI matched candidates', err);
+      setAiMatchedCandidates([]);
+    } finally {
+      setIsLoadingAiMatches(false);
     }
   };
 
@@ -678,7 +710,24 @@ export default function RecruiterDashboard() {
                       <Chip label={job.isActive ? 'Active' : 'Closed'} color={job.isActive ? 'success' : 'default'} size="small" />
                     </TableCell>
                     <TableCell align="right">
-                      <Button size="small" variant="outlined" onClick={() => openApplicantsModal(job.id)} sx={{ borderRadius: 2 }}>
+                      <Button 
+                        size="small" 
+                        variant="contained" 
+                        startIcon={<AutoAwesomeIcon sx={{ fontSize: '13px !important' }} />}
+                        onClick={() => openAiMatchesModal(job)} 
+                        sx={{ 
+                          mr: 1, 
+                          borderRadius: 2, 
+                          textTransform: 'none', 
+                          fontWeight: 600,
+                          fontSize: '0.72rem',
+                          bgcolor: '#4f46e5',
+                          '&:hover': { bgcolor: '#4338ca' }
+                        }}
+                      >
+                        AI Matches
+                      </Button>
+                      <Button size="small" variant="outlined" onClick={() => openApplicantsModal(job.id)} sx={{ borderRadius: 2, textTransform: 'none', fontSize: '0.72rem' }}>
                         Responses
                       </Button>
                     </TableCell>
@@ -765,11 +814,27 @@ export default function RecruiterDashboard() {
                 </TableCell>
                 <TableCell align="right">
                   <Button 
+                    variant="contained"
+                    size="small" 
+                    startIcon={<AutoAwesomeIcon sx={{ fontSize: '13px !important' }} />} 
+                    onClick={() => openAiMatchesModal(job)} 
+                    sx={{ 
+                      mr: 1, 
+                      borderRadius: 2, 
+                      textTransform: 'none', 
+                      fontWeight: 600,
+                      bgcolor: '#4f46e5',
+                      '&:hover': { bgcolor: '#4338ca' }
+                    }}
+                  >
+                    AI Matches
+                  </Button>
+                  <Button 
                     variant="outlined"
                     size="small" 
                     startIcon={<GroupIcon />} 
                     onClick={() => openApplicantsModal(job.id)} 
-                    sx={{ mr: 1, borderRadius: 2 }}
+                    sx={{ mr: 1, borderRadius: 2, textTransform: 'none' }}
                   >
                     Responses
                   </Button>
@@ -1697,9 +1762,290 @@ export default function RecruiterDashboard() {
         </DialogActions>
       </Dialog>
 
+      {/* AI Matched Candidates Modal */}
+      <Dialog 
+        open={isAiMatchesModalOpen} 
+        onClose={() => setIsAiMatchesModalOpen(false)} 
+        maxWidth="lg" 
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ bgcolor: 'rgba(79, 70, 229, 0.1)', p: 1, borderRadius: 2, display: 'flex' }}>
+              <AutoAwesomeIcon sx={{ color: '#4f46e5', fontSize: 24 }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                AI Matched Candidates
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                for <strong style={{ color: '#1e293b' }}>{selectedJobForMatches?.title}</strong>
+                {selectedJobForMatches?.location ? ` • ${selectedJobForMatches.location}` : ''}
+                {selectedJobForMatches?.boardAffiliation ? ` • Board: ${selectedJobForMatches.boardAffiliation}` : ''}
+                {selectedJobForMatches?.subjectDepartment ? ` • ${selectedJobForMatches.subjectDepartment}` : ''}
+              </Typography>
+            </Box>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Chip 
+              icon={<AutoAwesomeIcon sx={{ fontSize: '13px !important', color: '#4338ca !important' }} />}
+              label="Sorted by Match Score (Highest First)" 
+              size="small" 
+              sx={{ fontWeight: 600, fontSize: '0.72rem', bgcolor: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }} 
+            />
+            <IconButton onClick={() => setIsAiMatchesModalOpen(false)} size="small">
+              <CancelIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 0 }}>
+          {isLoadingAiMatches ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 8 }}>
+              <CircularProgress size={36} sx={{ color: '#4f46e5', mb: 2 }} />
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                Analyzing candidate profiles and calculating AI match scores...
+              </Typography>
+            </Box>
+          ) : aiMatchedCandidates.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 6, px: 3 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }} color="text.secondary">
+                No Matched Candidates Found
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                No candidates in the database currently match the criteria for this job.
+              </Typography>
+            </Box>
+          ) : (
+            <TableContainer sx={{ overflowX: 'hidden' }}>
+              <Table size="small" sx={{ tableLayout: 'fixed' }}>
+                <TableHead sx={{ bgcolor: '#f8fafc' }}>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold', width: '23%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>Candidate</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '18%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>AI Recommendation</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '10%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>Experience</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '15%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>Location</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '21%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>Skills & Credentials</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold', width: '13%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>Action</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {aiMatchedCandidates.map((candidate) => (
+                    <TableRow key={candidate.id} hover>
+                      <TableCell sx={{ px: { xs: 0.75, sm: 1 }, py: 1.25 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                          <Avatar 
+                            src={getMediaUrl(candidate.profilePictureUrl)}
+                            sx={{ bgcolor: 'primary.light', color: 'primary.main', width: 34, height: 34, fontSize: '0.8rem', flexShrink: 0 }}
+                          >
+                            {candidate.firstName?.[0]}{candidate.lastName?.[0]}
+                          </Avatar>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: '0.82rem', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {candidate.firstName} {candidate.lastName}
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary" sx={{ display: 'block', fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {candidate.email ? candidate.email : '***@***.***'}
+                            </Typography>
+                            {candidate.updatedAt && (
+                              <Tooltip title={`Profile Updated: ${formatDateTime(candidate.updatedAt)}`}>
+                                <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mt: 0.25, px: 0.6, py: 0.1, bgcolor: '#f1f5f9', borderRadius: 1, border: '1px solid #e2e8f0' }}>
+                                  <AccessTimeIcon sx={{ fontSize: 11, color: '#64748b' }} />
+                                  <Typography variant="caption" sx={{ color: '#475569', fontWeight: 500, fontSize: '0.65rem', whiteSpace: 'nowrap' }}>
+                                    Active: {formatRelativeTime(candidate.updatedAt)}
+                                  </Typography>
+                                </Box>
+                              </Tooltip>
+                            )}
+                          </Box>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ px: { xs: 0.75, sm: 1 }, py: 1.25 }}>
+                        {candidate.aiRecommendationScore !== null && candidate.aiRecommendationScore !== undefined ? (
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                            <Tooltip title={candidate.aiRecommendationReason || `AI Compatibility Score: ${Math.round(candidate.aiRecommendationScore)}%`}>
+                              <Chip
+                                icon={<AutoAwesomeIcon sx={{ fontSize: '13px !important', color: candidate.aiRecommendationScore >= 80 ? '#15803d !important' : candidate.aiRecommendationScore >= 60 ? '#0284c7 !important' : '#64748b !important' }} />}
+                                label={`${Math.round(candidate.aiRecommendationScore)}% Match`}
+                                size="small"
+                                sx={{
+                                  fontWeight: 700,
+                                  height: 22,
+                                  fontSize: '0.7rem',
+                                  width: 'fit-content',
+                                  bgcolor: candidate.aiRecommendationScore >= 80 
+                                    ? 'rgba(34, 197, 94, 0.15)' 
+                                    : candidate.aiRecommendationScore >= 60 
+                                      ? 'rgba(2, 132, 199, 0.15)' 
+                                      : 'rgba(148, 163, 184, 0.15)',
+                                  color: candidate.aiRecommendationScore >= 80 
+                                    ? '#15803d' 
+                                    : candidate.aiRecommendationScore >= 60 
+                                      ? '#0284c7' 
+                                      : '#64748b',
+                                  border: `1px solid ${
+                                    candidate.aiRecommendationScore >= 80 
+                                      ? 'rgba(34, 197, 94, 0.3)' 
+                                      : candidate.aiRecommendationScore >= 60 
+                                        ? 'rgba(2, 132, 199, 0.3)' 
+                                        : 'rgba(148, 163, 184, 0.3)'
+                                  }`
+                                }}
+                              />
+                            </Tooltip>
+                            {candidate.aiRecommendationReason && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: 'text.secondary',
+                                  fontSize: '0.67rem',
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 2,
+                                  WebkitBoxOrient: 'vertical',
+                                  overflow: 'hidden',
+                                  lineHeight: 1.2
+                                }}
+                                title={candidate.aiRecommendationReason}
+                              >
+                                {candidate.aiRecommendationReason}
+                              </Typography>
+                            )}
+                          </Box>
+                        ) : (
+                          <Typography variant="caption" color="textSecondary">-</Typography>
+                        )}
+                      </TableCell>
+                      <TableCell sx={{ px: { xs: 0.75, sm: 1 }, py: 1.25 }}>
+                        <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          {candidate.totalExperienceYears} Yrs
+                        </Typography>
+                        {candidate.noticePeriod && (
+                          <Typography variant="caption" color="textSecondary" sx={{ display: 'block', fontSize: '0.65rem', whiteSpace: 'nowrap' }}>
+                            {candidate.noticePeriod} notice
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell sx={{ px: { xs: 0.75, sm: 1 }, py: 1.25 }}>
+                        <Typography variant="body2" sx={{ fontSize: '0.8rem', lineHeight: 1.25, wordBreak: 'break-word' }}>
+                          {candidate.currentLocation || 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ px: { xs: 0.75, sm: 1 }, py: 1.25 }}>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {candidate.isCtetQualified && (
+                            <Chip label="CTET" size="small" color="success" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700 }} />
+                          )}
+                          {candidate.demoVideoUrl && candidate.demoVideoStatus === 'Verified' ? (
+                            <Tooltip title={candidate.demoVideoSummary ? `Lesson: ${candidate.demoVideoSummary}` : 'AI Verified Teaching Demonstration'}>
+                              <Button 
+                                variant="contained" 
+                                size="small" 
+                                href={candidate.demoVideoUrl} 
+                                target="_blank" 
+                                startIcon={<PlayCircleOutlineIcon sx={{ fontSize: '12px !important' }} />}
+                                sx={{ 
+                                  textTransform: 'none', 
+                                  bgcolor: '#16a34a', color: '#fff',
+                                  '&:hover': { bgcolor: '#15803d' },
+                                  fontWeight: 600,
+                                  fontSize: '0.65rem',
+                                  py: 0.1, px: 0.6,
+                                  height: 20,
+                                  minHeight: 20,
+                                  borderRadius: 1
+                                }}
+                              >
+                                Demo {candidate.demoVideoSubject ? `(${candidate.demoVideoSubject})` : ''}
+                              </Button>
+                            </Tooltip>
+                          ) : candidate.demoVideoUrl && candidate.demoVideoStatus !== 'Rejected' ? (
+                            <Button 
+                              variant="outlined" 
+                              color="primary" 
+                              size="small" 
+                              href={candidate.demoVideoUrl} 
+                              target="_blank" 
+                              startIcon={<PlayCircleOutlineIcon sx={{ fontSize: '12px !important' }} />}
+                              sx={{ textTransform: 'none', fontSize: '0.65rem', py: 0.1, px: 0.6, height: 20, minHeight: 20, borderRadius: 1 }}
+                            >
+                              Demo
+                            </Button>
+                          ) : null}
+                          {candidate.joiningAvailability && (
+                            <Chip label={candidate.joiningAvailability} size="small" color="info" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />
+                          )}
+                          {candidate.skills && (
+                            <Tooltip title={candidate.skills}>
+                              <Chip label="Skills" size="small" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />
+                            </Tooltip>
+                          )}
+                          {candidate.classesTaught && (
+                            <Tooltip title={`Classes: ${candidate.classesTaught}`}>
+                              <Chip label="Classes" size="small" variant="outlined" color="primary" sx={{ height: 20, fontSize: '0.65rem' }} />
+                            </Tooltip>
+                          )}
+                          {candidate.boardsTaught && (
+                            <Tooltip title={`Boards: ${candidate.boardsTaught}`}>
+                              <Chip label="Boards" size="small" variant="outlined" color="secondary" sx={{ height: 20, fontSize: '0.65rem' }} />
+                            </Tooltip>
+                          )}
+                          {!candidate.skills && !candidate.classesTaught && !candidate.boardsTaught && !candidate.isCtetQualified && (
+                            <Typography variant="caption" color="textSecondary">N/A</Typography>
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right" sx={{ px: { xs: 0.75, sm: 1 }, py: 1.25 }}>
+                        {candidate.hasUnlockedContact ? (
+                          <Box sx={{ textAlign: 'left', mb: 0.75, p: 0.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+                            <Typography variant="caption" sx={{ display: 'block', fontWeight: 'bold', fontSize: '0.68rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={candidate.email}>{candidate.email}</Typography>
+                            <Typography variant="caption" sx={{ display: 'block', color: 'textSecondary', fontSize: '0.68rem' }}>{candidate.phoneNumber}</Typography>
+                          </Box>
+                        ) : (
+                          <Button 
+                            variant="outlined" 
+                            size="small" 
+                            onClick={() => handleUnlockContact(candidate.id)}
+                            sx={{ mb: 0.5, display: 'block', width: '100%', py: 0.25, px: 0.5, fontSize: '0.68rem', textTransform: 'none', fontWeight: 600, minHeight: 24 }}
+                          >
+                            Unlock Contact
+                          </Button>
+                        )}
+                        <Button 
+                          variant="outlined" 
+                          color={candidate.hasDownloadedResume ? "success" : "secondary"}
+                          size="small" 
+                          startIcon={<DescriptionIcon sx={{ fontSize: '12px !important' }} />}
+                          onClick={() => handleDownloadResume(candidate)}
+                          sx={{ width: '100%', py: 0.25, px: 0.5, fontSize: '0.68rem', textTransform: 'none', fontWeight: 600, minHeight: 24 }}
+                        >
+                          {candidate.hasDownloadedResume ? "View Resume" : "Unlock Resume"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5, justifyContent: 'space-between' }}>
+          <Typography variant="caption" color="text.secondary">
+            Showing {aiMatchedCandidates.length} candidate{aiMatchedCandidates.length === 1 ? '' : 's'} ranked by AI match score
+          </Typography>
+          <Button onClick={() => setIsAiMatchesModalOpen(false)} variant="outlined" size="small">Close</Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Applicants Modal */}
       <Dialog open={isApplicantsModalOpen} onClose={() => setIsApplicantsModalOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>Job Applications</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>Job Applications</span>
+          <Chip 
+            icon={<AutoAwesomeIcon sx={{ fontSize: '14px !important', color: '#4338ca !important' }} />}
+            label="Sorted by AI Match Score" 
+            size="small" 
+            sx={{ fontSize: '0.72rem', fontWeight: 600, bgcolor: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }} 
+          />
+        </DialogTitle>
         <DialogContent dividers sx={{ p: 0 }}>
           <TableContainer>
             <Table>

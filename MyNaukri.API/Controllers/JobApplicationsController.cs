@@ -309,6 +309,7 @@ public class JobApplicationsController : ControllerBase
                 ScreeningAnswersJson = a.ScreeningAnswersJson,
                 JobTitle = job.Title
             })
+            .OrderByDescending(a => a.AiMatchScore ?? 0)
             .ToListAsync();
 
         return Ok(applications);
