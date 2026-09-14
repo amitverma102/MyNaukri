@@ -9,6 +9,7 @@ import Register from './components/Register';
 import VerifyOtp from './components/VerifyOtp';
 import ForgotPassword from './components/ForgotPassword';
 import ResetPassword from './components/ResetPassword';
+import EduBotChat from './components/ai/EduBotChat';
 import './App.css';
 
 // Lazy-loaded route components for optimal production bundle splitting
@@ -108,6 +109,7 @@ function App() {
         </Routes>
       </Suspense>
       <Footer />
+      <EduBotChat />
     </Box>
   );
 }

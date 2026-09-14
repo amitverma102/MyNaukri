@@ -16,6 +16,8 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using UglyToad.PdfPig;
 using MyNaukri.Domain.Entities;
+using MyNaukri.Domain.Enums;
+using MyNaukri.Application.DTOs.Ai;
 
 namespace MyNaukri.Infrastructure.Services;
 
@@ -1061,4 +1063,328 @@ Respond ONLY with a valid JSON object matching this schema exactly:
             RawTextPreview = (text != null && text.Length > 500) ? text.Substring(0, 500) + "..." : (text ?? "")
         };
     }
+
+    public async Task<EduBotChatResponseDto> ChatWithEduBotAsync(EduBotChatRequestDto request)
+    {
+        var message = (request?.Message ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return new EduBotChatResponseDto
+            {
+                Response = "Hello! I am **EduBot**, your dedicated AI Career & Education Assistant on **Edukey360**. How can I help you today?",
+                IsOffTopic = false,
+                ActionType = "career_advice",
+                SuggestedPrompts = new List<string>
+                {
+                    "Find PGT / TGT Teaching Jobs",
+                    "How to become an Instructional Designer?",
+                    "CTET & B.Ed certification tips",
+                    "How recruiters search teacher profiles"
+                }
+            };
+        }
+
+        var lowerMsg = message.ToLowerInvariant();
+
+        // 1. Guardrail Pre-Check for Obvious Off-Topic queries
+        if (IsOffTopicQuery(lowerMsg))
+        {
+            return GenerateOffTopicResponse();
+        }
+
+        // 2. Fetch relevant active jobs from DB if this query mentions jobs or subjects
+        var isJobQuery = IsJobRelatedQuery(lowerMsg);
+        List<JobDto>? matchingJobs = null;
+        string jobsContextSummary = "No specific matching jobs found.";
+
+        if (isJobQuery)
+        {
+            matchingJobs = await FetchMatchingJobsAsync(lowerMsg);
+            if (matchingJobs != null && matchingJobs.Any())
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine("Active jobs currently available in the Edukey360 database matching the user's inquiry:");
+                foreach (var j in matchingJobs)
+                {
+                    sb.AppendLine($"- Title: {j.Title} | Institution: {j.CompanyName} | Location: {j.Location} | Board: {j.BoardAffiliation} | Subject: {j.SubjectDepartment} | Salary: ₹{j.MinSalary:N0} - ₹{j.MaxSalary:N0} | WorkMode: {j.WorkMode}");
+                }
+                jobsContextSummary = sb.ToString();
+            }
+        }
+
+        // 3. Prepare Conversation History
+        var historyText = new StringBuilder();
+        if (request?.History != null && request.History.Any())
+        {
+            foreach (var h in request.History.TakeLast(5))
+            {
+                var role = h.Sender?.Equals("edubot", StringComparison.OrdinalIgnoreCase) == true ? "Assistant" : "User";
+                historyText.AppendLine($"{role}: {h.Content}");
+            }
+        }
+
+        // 4. Construct Prompt for Gemini
+        var prompt = $@"
+You are EduBot, the friendly, intelligent, and highly knowledgeable AI Career & Education Assistant for Edukey360 (https://www.edukey360.com).
+Edukey360 is a dedicated recruitment and career ecosystem connecting educators, schools, colleges, universities, and EdTech platforms.
+
+=== USER PROFILE / CONTEXT ===
+User Role: {(string.IsNullOrWhiteSpace(request?.UserRole) ? "Educator / Candidate / Recruiter" : request.UserRole)}
+
+=== CONVERSATION RECENT HISTORY ===
+{(historyText.Length > 0 ? historyText.ToString() : "None")}
+
+=== USER'S CURRENT MESSAGE ===
+{message}
+
+=== DATABASE JOBS CONTEXT ===
+{jobsContextSummary}
+
+=== SCOPE AND MISSION ===
+Your domain includes ONLY:
+1. Teaching & School/College Faculty Roles (PGT, TGT, PRT, Pre-primary, College Professors, Lecturers, Principals, HODs, Coordinators).
+2. EduTech & Alternative Education Roles (Instructional Designers, Curriculum Developers, Academic Counselors, LMS Administrators, Content Developers, STEM / Robotics / AI Trainers).
+3. Skills Upgradation & Certifications (CTET, State TET, B.Ed, M.Ed, UGC NET, CSIR NET, NEP 2020 pedagogical integration, digital classroom tools, interactive smartboards, Canvas/Moodle LMS, Bloom's Taxonomy, Differentiated Instruction, Lesson Planning, Classroom Management, Teacher Demo Interviews).
+4. Recruiter & School Assistance (Posting teaching jobs, Resdex educator profile search, AI resume matching, candidate shortlisting, hiring credits on Edukey360).
+5. Job Matching: Highlighting relevant active vacancies from the platform database context above.
+
+=== STRICT GUARDRAIL RULES ===
+If the user's message is NOT related to education, schools, colleges, edtech, teaching careers, pedagogical skills, academic hiring, or professional development in education (for example, queries about: cooking recipes, food, sports/cricket scores, movie reviews, celebrity gossip, cryptocurrency/crypto trading, politics/elections, personal medical symptoms/prescriptions, gaming):
+- You MUST politely decline to answer the off-topic request.
+- State that as EduBot, your expertise is solely focused on Education and EduTech careers.
+- Warmly invite them to ask about teaching careers, curriculum design, certifications, or hiring instead.
+- Set ""isOffTopic"": true.
+- Set ""actionType"": ""guardrail_denial"".
+- Provide suggested prompts related to education/teaching.
+
+=== OUTPUT FORMAT ===
+Respond ONLY with a valid JSON object matching this schema exactly:
+{{
+  ""response"": ""Markdown formatted response with clear headers, bullet points, and an encouraging tone."",
+  ""isOffTopic"": false,
+  ""suggestedPrompts"": [
+    ""Suggested follow-up prompt 1"",
+    ""Suggested follow-up prompt 2"",
+    ""Suggested follow-up prompt 3""
+  ],
+  ""actionType"": ""job_search | skills_guide | recruiter_help | career_advice | guardrail_denial""
+}}";
+
+        var result = await CallGeminiAndDeserializeAsync<EduBotChatResponseDto>(prompt);
+        if (result != null && !string.IsNullOrWhiteSpace(result.Response))
+        {
+            if (isJobQuery && matchingJobs != null && matchingJobs.Any())
+            {
+                result.MatchingJobs = matchingJobs;
+                if (string.IsNullOrWhiteSpace(result.ActionType) || result.ActionType == "general")
+                {
+                    result.ActionType = "job_search";
+                }
+            }
+            return result;
+        }
+
+        // Fallback rule-based engine
+        return GetFallbackEduBotResponse(request ?? new EduBotChatRequestDto { Message = message }, matchingJobs);
+    }
+
+    private static bool IsOffTopicQuery(string lower)
+    {
+        var educationalSafelist = new[] { "teach", "learn", "course", "curriculum", "school", "college", "student", "teacher", "exam", "education", "edtech", "pedagogy", "ctet", "b.ed", "net", "academic", "class", "faculty", "syllabus", "board", "cbse", "icse", "kindergarten", "k12", "stem" };
+        if (educationalSafelist.Any(w => lower.Contains(w)))
+        {
+            return false;
+        }
+
+        var offTopicPatterns = new[]
+        {
+            @"\b(recipe|recipes|cook|cooking|bake|baking|pizza|burger|pasta|restaurant|biryani|paneer|cocktail|smoothie|ingredients)\b",
+            @"\b(cricket|ipl|football|fifa|messi|ronaldo|virat|kohli|dhoni|wicket|batting|bowling|nba|tennis|badminton|olympics|sports score)\b",
+            @"\b(crypto|cryptocurrency|bitcoin|ethereum|btc|doge|forex|stock market|nifty|sensex|trading signal|buy sell shares)\b",
+            @"\b(movie|movies|bollywood|hollywood|celebrity|actor|actress|box office|netflix show|cinema|trailer|song lyrics)\b",
+            @"\b(politics|election|voting|modi|bjp|congress|rahul gandhi|parliament|democrat|republican|president election)\b",
+            @"\b(horoscope|astrology|zodiac|rashifal|kundali)\b",
+            @"\b(fever|cough|paracetamol|antibiotic|headache cure|medicine dosage|symptom of disease|doctor prescription)\b",
+            @"\b(gaming|pubg|fortnite|minecraft|playstation|xbox|gta)\b"
+        };
+
+        return offTopicPatterns.Any(p => Regex.IsMatch(lower, p, RegexOptions.IgnoreCase));
+    }
+
+    private static EduBotChatResponseDto GenerateOffTopicResponse()
+    {
+        return new EduBotChatResponseDto
+        {
+            Response = "I am **EduBot**, your specialized AI Career & Education Assistant on **Edukey360**! 🎓\n\nMy expertise is exclusively tailored to the **Education & EduTech ecosystem** — including teaching positions, school & college hiring, instructional design, curriculum development, and teacher certifications (CTET, B.Ed, NET).\n\nI'm not able to assist with topics outside of education. Could I assist you with any teaching vacancies, educator hiring, or career pathways instead?",
+            IsOffTopic = true,
+            ActionType = "guardrail_denial",
+            SuggestedPrompts = new List<string>
+            {
+                "Explore PGT & TGT Teaching Jobs",
+                "Instructional Designer Career Path",
+                "CTET & B.Ed Preparation Tips",
+                "How Recruiters Search Teacher Profiles on Edukey360"
+            }
+        };
+    }
+
+    private static bool IsJobRelatedQuery(string lower)
+    {
+        var jobKeywords = new[] {
+            "job", "opening", "vacancy", "vacancies", "hiring", "opportunities", "positions",
+            "math", "mathematics", "physics", "chemistry", "biology", "english", "science", "social studies",
+            "computer science", "stem", "robotics", "curriculum", "instructional", "counselor",
+            "pgt", "tgt", "prt", "principal", "professor", "lecturer", "delhi", "bengaluru", "bangalore",
+            "mumbai", "pune", "hyderabad", "remote", "work from home", "salary", "cbse", "icse", "ib"
+        };
+        return jobKeywords.Any(k => lower.Contains(k));
+    }
+
+    private async Task<List<JobDto>> FetchMatchingJobsAsync(string lower)
+    {
+        try
+        {
+            var activeJobs = await _context.Jobs
+                .Include(j => j.Institution)
+                .Where(j => j.IsActive)
+                .OrderByDescending(j => j.CreatedAt)
+                .Take(25)
+                .ToListAsync();
+
+            if (!activeJobs.Any()) return new List<JobDto>();
+
+            var words = lower.Split(new[] { ' ', ',', '.', '?', '!', '\t', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(w => w.Length > 2)
+                .ToList();
+
+            var scored = activeJobs.Select(job =>
+            {
+                int score = 0;
+                var haystack = $"{job.Title} {job.SubjectDepartment} {job.BoardAffiliation} {job.Location} {job.Keywords} {job.Description}".ToLowerInvariant();
+                foreach (var w in words)
+                {
+                    if (haystack.Contains(w)) score += 2;
+                }
+                return (Job: job, Score: score);
+            })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score)
+            .Take(4)
+            .Select(x => x.Job)
+            .ToList();
+
+            if (!scored.Any())
+            {
+                scored = activeJobs.Take(3).ToList();
+            }
+
+            return scored.Select(j => new JobDto
+            {
+                Id = j.Id,
+                Title = j.Title,
+                Description = j.Description,
+                Requirements = j.Requirements,
+                MinSalary = j.MinSalary,
+                MaxSalary = j.MaxSalary,
+                JobType = j.JobType,
+                Location = j.Location,
+                IsActive = j.IsActive,
+                RecruiterId = j.RecruiterId,
+                InstitutionId = j.InstitutionId,
+                CreatedAt = j.CreatedAt,
+                CompanyName = j.Institution?.Name ?? "Educational Institution",
+                InstitutionLogoUrl = j.Institution?.LogoUrl,
+                BoardAffiliation = j.BoardAffiliation,
+                SubjectDepartment = j.SubjectDepartment,
+                WorkMode = j.WorkMode
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to fetch matching jobs for EduBot chat");
+            return new List<JobDto>();
+        }
+    }
+
+    private EduBotChatResponseDto GetFallbackEduBotResponse(EduBotChatRequestDto request, List<JobDto>? matchingJobs)
+    {
+        var msg = (request?.Message ?? "").Trim().ToLowerInvariant();
+
+        // 1. Guardrail check in fallback
+        if (IsOffTopicQuery(msg))
+        {
+            return GenerateOffTopicResponse();
+        }
+
+        // 2. Job search response
+        if (matchingJobs != null && matchingJobs.Any())
+        {
+            var jobListings = string.Join("\n", matchingJobs.Select(j => 
+                $"- **{j.Title}** at {j.CompanyName} ({j.BoardAffiliation ?? "CBSE/ICSE"}, {j.Location}, ₹{(j.MinSalary ?? 0)/100000:0.#} - {(j.MaxSalary ?? 0)/100000:0.#} LPA)"));
+
+            return new EduBotChatResponseDto
+            {
+                Response = $"### 🎯 Matching Educational Opportunities on Edukey360\n\nHere are active positions aligned with your query:\n\n{jobListings}\n\nYou can review complete requirements and submit your application directly by selecting any card below!",
+                IsOffTopic = false,
+                ActionType = "job_search",
+                MatchingJobs = matchingJobs,
+                SuggestedPrompts = new List<string>
+                {
+                    "What are the essential skills for these positions?",
+                    "How to prepare for the teaching demo interview?",
+                    "Explore more teaching openings"
+                }
+            };
+        }
+
+        // 3. Skills / Certifications query
+        if (msg.Contains("ctet") || msg.Contains("b.ed") || msg.Contains("net") || msg.Contains("skill") || msg.Contains("certification") || msg.Contains("upgrade"))
+        {
+            return new EduBotChatResponseDto
+            {
+                Response = "### 📚 Recommended Skills & Certifications for High-Growth Teaching Careers\n\n1. **Essential Credentials**:\n   - **CTET / State TET**: Mandatory for CBSE & government school appointments (Paper 1: Classes 1-5, Paper 2: Classes 6-8).\n   - **B.Ed / M.Ed**: Foundational pedagogy and classroom psychology degree required by CBSE/ICSE schools.\n   - **UGC NET / CSIR NET**: Essential qualification for college lecturer and Assistant Professor roles.\n\n2. **Modern EduTech & Digital Competencies**:\n   - **LMS Platforms**: Mastery of Canvas, Moodle, Google Classroom, and MS Teams for Education.\n   - **Pedagogical Frameworks**: Bloom's Revised Taxonomy, Constructivist Pedagogy, and Backward Curriculum Design.\n   - **EdTech Tools**: Interactive Smartboards, GeoGebra, Kahoot, Quizizz, and AI-assisted lesson planning.\n\n3. **Classroom Excellence & NEP 2020**:\n   - Competency-based education and experiential learning.\n   - Formative and diagnostic assessment design for mixed-ability learners.",
+                IsOffTopic = false,
+                ActionType = "skills_guide",
+                SuggestedPrompts = new List<string>
+                {
+                    "How to prepare for CTET Paper 2?",
+                    "Instructional design courses for educators",
+                    "Search teaching jobs matching my skills"
+                }
+            };
+        }
+
+        // 4. Recruiter query
+        if (msg.Contains("recruiter") || msg.Contains("hire") || msg.Contains("resdex") || msg.Contains("candidate") || msg.Contains("post job") || msg.Contains("credit"))
+        {
+            return new EduBotChatResponseDto
+            {
+                Response = "### 🏫 Recruiter & Institution Support on Edukey360\n\nEdukey360 provides specialized hiring tools for schools, colleges, and EdTech companies:\n\n1. **Resdex Candidate Search**:\n   - Search thousands of verified teacher and faculty profiles filtered by Subject, Board (CBSE/ICSE/IB), Experience, and Location.\n   - Unlock candidate contact details directly using your hiring credit balance.\n\n2. **AI Candidate Matching**:\n   - For every active job you post, Edukey360 automatically analyzes and ranks candidate resumes with AI Match Scores.\n\n3. **Quick Job Posting**:\n   - Post new faculty and staff openings in minutes with AI JD parsing and suggested screening questions.\n\nVisit your **Recruiter Dashboard** or browse **Resdex** from the navigation bar to get started!",
+                IsOffTopic = false,
+                ActionType = "recruiter_help",
+                SuggestedPrompts = new List<string>
+                {
+                    "How do Resdex unlock credits work?",
+                    "Post a new teaching job",
+                    "How does AI candidate matching work?"
+                }
+            };
+        }
+
+        // 5. Default career guide
+        return new EduBotChatResponseDto
+        {
+            Response = "Hello! I am **EduBot**, your dedicated AI Career and Education Assistant on **Edukey360**! 🎓\n\nI can help you navigate the modern education ecosystem:\n- 🎯 **Find Teaching & EduTech Jobs** tailored to your subject, board, and location.\n- 📈 **Career Pathways** for Educators, Instructional Designers, STEM Trainers, and Academic Counselors.\n- 💡 **Skills Upgradation** (CTET, B.Ed, NET, LMS mastery, lesson planning, and demo interview tips).\n- 🏫 **Recruiter Guidance** for schools and institutes looking to source qualified educators.\n\nWhat would you like assistance with today?",
+            IsOffTopic = false,
+            ActionType = "career_advice",
+            SuggestedPrompts = new List<string>
+            {
+                "Find PGT / TGT Teaching Jobs",
+                "How to transition into Instructional Design?",
+                "What skills do CBSE schools prioritize?",
+                "How can recruiters search teacher profiles?"
+            }
+        };
+    }
 }
+

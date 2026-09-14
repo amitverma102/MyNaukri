@@ -2,6 +2,7 @@ using MyNaukri.Application.DTOs.Jobs;
 using MyNaukri.Application.Interfaces;
 using MyNaukri.Domain.Enums;
 using MyNaukri.Application.DTOs.Candidates;
+using MyNaukri.Application.DTOs.Ai;
 
 namespace MyNaukri.Infrastructure.Services;
 
@@ -154,4 +155,112 @@ public class MockAiService : IAiService
 
         return Task.FromResult(mockResult);
     }
+
+    public Task<EduBotChatResponseDto> ChatWithEduBotAsync(EduBotChatRequestDto request)
+    {
+        var msg = (request?.Message ?? "").Trim();
+        var lower = msg.ToLowerInvariant();
+
+        // Check off-topic guardrail
+        var offTopicKeywords = new[] { "recipe", "pizza", "cook", "cricket", "ipl", "football", "bitcoin", "crypto", "movie", "celebrity", "politics", "election", "weather", "horoscope" };
+        if (offTopicKeywords.Any(k => lower.Contains(k)))
+        {
+            return Task.FromResult(new EduBotChatResponseDto
+            {
+                Response = "I am **EduBot**, your specialized EduTech & Career Assistant on Edukey360! 🎓\n\nI am designed specifically to assist with education careers, teaching opportunities, school & college hiring, and educational skills upgradation. I am unable to answer queries about non-educational topics.\n\nHow can I assist you with your academic career, teaching roles, or recruitment needs today?",
+                IsOffTopic = true,
+                ActionType = "guardrail_denial",
+                SuggestedPrompts = new List<string>
+                {
+                    "Explore PGT & TGT Teaching Jobs",
+                    "Instructional Designer Career Path",
+                    "CTET & B.Ed Preparation Tips",
+                    "How Recruiters Find Educators on Edukey360"
+                }
+            });
+        }
+
+        // Job search intent
+        if (lower.Contains("job") || lower.Contains("opening") || lower.Contains("vacancy") || lower.Contains("math") || lower.Contains("teacher") || lower.Contains("faculty") || lower.Contains("hire"))
+        {
+            var mockJobs = new List<JobDto>
+            {
+                new JobDto
+                {
+                    Id = Guid.NewGuid(),
+                    Title = "Senior PGT Mathematics Teacher",
+                    CompanyName = "Delhi Public International School",
+                    Location = "Delhi NCR",
+                    MinSalary = 600000,
+                    MaxSalary = 900000,
+                    BoardAffiliation = "CBSE",
+                    SubjectDepartment = "Mathematics",
+                    WorkMode = "OnSite",
+                    JobType = JobType.FullTime,
+                    CreatedAt = DateTime.UtcNow
+                },
+                new JobDto
+                {
+                    Id = Guid.NewGuid(),
+                    Title = "Curriculum & Instructional Designer",
+                    CompanyName = "EduKey Learning Systems",
+                    Location = "Bengaluru (Hybrid)",
+                    MinSalary = 750000,
+                    MaxSalary = 1200000,
+                    BoardAffiliation = "CBSE & ICSE",
+                    SubjectDepartment = "Instructional Design",
+                    WorkMode = "Hybrid",
+                    JobType = JobType.FullTime,
+                    CreatedAt = DateTime.UtcNow
+                }
+            };
+
+            return Task.FromResult(new EduBotChatResponseDto
+            {
+                Response = "Here are matching teaching and EduTech opportunities currently open on **Edukey360**! 🚀\n\n- **Senior PGT Mathematics Teacher** at Delhi Public International School (CBSE, Delhi NCR, ₹6 - 9 LPA)\n- **Curriculum & Instructional Designer** at EduKey Learning Systems (Hybrid, Bengaluru, ₹7.5 - 12 LPA)\n\nYou can click on any position below to view complete details, requirements, and apply directly.",
+                IsOffTopic = false,
+                ActionType = "job_search",
+                MatchingJobs = mockJobs,
+                SuggestedPrompts = new List<string>
+                {
+                    "What skills are required for PGT roles?",
+                    "Tips for classroom demo interviews",
+                    "Remote EdTech opportunities"
+                }
+            });
+        }
+
+        // Skills / Certifications intent
+        if (lower.Contains("ctet") || lower.Contains("b.ed") || lower.Contains("net") || lower.Contains("skill") || lower.Contains("certification") || lower.Contains("upgrade"))
+        {
+            return Task.FromResult(new EduBotChatResponseDto
+            {
+                Response = "### 📚 Key Skills & Certifications for High-Growth Teaching Careers\n\n1. **Essential Credentials**:\n   - **CTET / State TET**: Mandatory for CBSE/government school appointments (Paper 1 for PRT, Paper 2 for TGT).\n   - **B.Ed / M.Ed**: Foundational pedagogy certification required by CBSE, ICSE, and state boards.\n   - **UGC NET / CSIR NET**: Gateway for Assistant Professor & higher education faculty positions.\n\n2. **Modern EduTech & Digital Skills**:\n   - **Learning Management Systems (LMS)**: Familiarity with Canvas, Moodle, or Google Classroom.\n   - **Instructional Design Frameworks**: ADDIE model, Bloom's Revised Taxonomy, and backward curriculum design.\n   - **Interactive Tech**: Smartboards, GeoGebra, Kahoot, and AI-assisted lesson planning.\n\n3. **Classroom Excellence**:\n   - Demonstrating differentiated instruction for mixed-ability learners.\n   - Constructivist teaching and NEP 2020 competency-based learning outcomes.",
+                IsOffTopic = false,
+                ActionType = "skills_guide",
+                SuggestedPrompts = new List<string>
+                {
+                    "How to prepare for CTET Paper 2?",
+                    "Instructional design courses for teachers",
+                    "Find teaching jobs matching my profile"
+                }
+            });
+        }
+
+        // Default career advice
+        return Task.FromResult(new EduBotChatResponseDto
+        {
+            Response = "Hello! I am **EduBot**, your dedicated AI Career and Education Assistant on **Edukey360**! 🎓\n\nI can help you with:\n- 🎯 **Finding EduTech & Teaching Jobs** matching your subject, board, and location.\n- 📈 **Career Pathways** for Teachers, Instructional Designers, STEM Trainers, and Academic Counselors.\n- 💡 **Skills Upgradation** (CTET, B.Ed, LMS mastery, lesson planning, and demo interview tips).\n- 🏫 **Recruiter Guidance** for schools and institutes looking to source qualified educators.\n\nWhat would you like to explore today?",
+            IsOffTopic = false,
+            ActionType = "career_advice",
+            SuggestedPrompts = new List<string>
+            {
+                "Find PGT / TGT Teaching Jobs",
+                "How to transition into Instructional Design?",
+                "Key certifications for CBSE schools",
+                "How can recruiters search teacher profiles?"
+            }
+        });
+    }
 }
+
