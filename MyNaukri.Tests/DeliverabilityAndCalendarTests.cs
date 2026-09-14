@@ -1,6 +1,9 @@
 using System;
+using System.Linq;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Moq;
@@ -155,5 +158,159 @@ public class DeliverabilityAndCalendarTests
         var result = await controller.DownloadInterviewCalendar(Guid.NewGuid());
         var notFoundResult = Assert.IsType<NotFoundObjectResult>(result);
         Assert.Equal("Interview not found or not yet scheduled.", notFoundResult.Value);
+    }
+
+    [Fact]
+    public async Task ScheduleInterview_WhenRescheduling_RecordsCommentWithReasonAndUpdatesSchedule()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(databaseName: "ScheduleTestDb_" + Guid.NewGuid())
+            .Options;
+
+        using var context = new ApplicationDbContext(options);
+
+        var recruiterUser = new User { Email = "recruiter@school.com", FirstName = "Rohit", LastName = "Verma" };
+        var recruiter = new Recruiter { UserId = recruiterUser.Id, User = recruiterUser };
+        var institution = new Institution { Name = "Delhi Public School", Code = "DPS-01" };
+        var job = new Job { Title = "PGT Physics Teacher", InstitutionId = institution.Id, Institution = institution, RecruiterId = recruiter.Id, Recruiter = recruiter };
+        var candidateUser = new User { Email = "candidate@example.com", FirstName = "Aakash", LastName = "Gupta" };
+        var candidate = new Candidate { UserId = candidateUser.Id, User = candidateUser };
+
+        var application = new JobApplication
+        {
+            JobId = job.Id,
+            Job = job,
+            CandidateId = candidate.Id,
+            Candidate = candidate,
+            Status = ApplicationStatus.InterviewScheduled,
+            InterviewDate = DateTime.UtcNow.AddDays(1),
+            InterviewMode = InterviewMode.Online,
+            InterviewLink = "https://meet.google.com/old-link",
+            InterviewDetails = "Round 1 Demo"
+        };
+
+        context.Users.AddRange(recruiterUser, candidateUser);
+        context.Recruiters.Add(recruiter);
+        context.Institutions.Add(institution);
+        context.Jobs.Add(job);
+        context.Candidates.Add(candidate);
+        context.JobApplications.Add(application);
+        await context.SaveChangesAsync();
+
+        var calendarService = new CalendarInviteService();
+        var mockPush = new Mock<IPushNotificationService>();
+        var mockNotification = new Mock<INotificationService>();
+        var mockAi = new Mock<IAiService>();
+        var mockStorage = new Mock<IStorageService>();
+
+        var controller = new JobApplicationsController(context, calendarService, mockPush.Object, mockNotification.Object, mockAi.Object, mockStorage.Object);
+        var claimsUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, recruiterUser.Id.ToString()),
+            new Claim(ClaimTypes.Role, "Recruiter")
+        }, "mock"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = claimsUser }
+        };
+
+        var newDate = DateTime.UtcNow.AddDays(3);
+        var rescheduleRequest = new JobApplicationsController.ScheduleInterviewRequest
+        {
+            InterviewDate = newDate,
+            InterviewMode = InterviewMode.Online,
+            InterviewLink = "https://zoom.us/j/999888777",
+            InterviewDetails = "Shifted to accommodate academic panel",
+            RescheduleReason = "Academic head was traveling"
+        };
+
+        var result = await controller.ScheduleInterview(application.Id, rescheduleRequest);
+        Assert.IsType<NoContentResult>(result);
+
+        var updatedApp = await context.JobApplications.FindAsync(application.Id);
+        Assert.NotNull(updatedApp);
+        Assert.Equal(newDate, updatedApp.InterviewDate);
+        Assert.Equal("https://zoom.us/j/999888777", updatedApp.InterviewLink);
+
+        var comments = await context.JobApplicationComments.Where(c => c.JobApplicationId == application.Id).ToListAsync();
+        Assert.Single(comments);
+        Assert.Contains("Interview Rescheduled to", comments[0].Comment);
+        Assert.Contains("Academic head was traveling", comments[0].Comment);
+
+        mockPush.Verify(p => p.SendPushNotificationAsync(
+            candidateUser.Id,
+            "Interview Rescheduled!",
+            It.Is<string>(body => body.Contains("rescheduled to"))
+        ), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateApplicationStatus_WithComment_PersistsDecisionComment()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(databaseName: "StatusDecisionTestDb_" + Guid.NewGuid())
+            .Options;
+
+        using var context = new ApplicationDbContext(options);
+
+        var recruiterUser = new User { Email = "hr@school.com", FirstName = "Anil", LastName = "Mehta" };
+        var recruiter = new Recruiter { UserId = recruiterUser.Id, User = recruiterUser };
+        var institution = new Institution { Name = "Modern School", Code = "MS-01" };
+        var job = new Job { Title = "TGT English", InstitutionId = institution.Id, Institution = institution, RecruiterId = recruiter.Id, Recruiter = recruiter };
+        var candidateUser = new User { Email = "sneha@example.com", FirstName = "Sneha", LastName = "Kapoor" };
+        var candidate = new Candidate { UserId = candidateUser.Id, User = candidateUser };
+
+        var application = new JobApplication
+        {
+            JobId = job.Id,
+            Job = job,
+            CandidateId = candidate.Id,
+            Candidate = candidate,
+            Status = ApplicationStatus.InterviewScheduled
+        };
+
+        context.Users.AddRange(recruiterUser, candidateUser);
+        context.Recruiters.Add(recruiter);
+        context.Institutions.Add(institution);
+        context.Jobs.Add(job);
+        context.Candidates.Add(candidate);
+        context.JobApplications.Add(application);
+        await context.SaveChangesAsync();
+
+        var calendarService = new CalendarInviteService();
+        var mockPush = new Mock<IPushNotificationService>();
+        var mockNotification = new Mock<INotificationService>();
+        var mockAi = new Mock<IAiService>();
+        var mockStorage = new Mock<IStorageService>();
+
+        var controller = new JobApplicationsController(context, calendarService, mockPush.Object, mockNotification.Object, mockAi.Object, mockStorage.Object);
+        var claimsUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, recruiterUser.Id.ToString()),
+            new Claim(ClaimTypes.Role, "Recruiter")
+        }, "mock"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = claimsUser }
+        };
+
+        var updateRequest = new JobApplicationsController.UpdateStatusRequest
+        {
+            Status = ApplicationStatus.Offered,
+            Note = "Outstanding demo presentation on Shakespearean literature. Selected for Senior Wing."
+        };
+
+        var result = await controller.UpdateApplicationStatus(application.Id, updateRequest);
+        Assert.IsType<NoContentResult>(result);
+
+        var updatedApp = await context.JobApplications.FindAsync(application.Id);
+        Assert.NotNull(updatedApp);
+        Assert.Equal(ApplicationStatus.Offered, updatedApp.Status);
+
+        var comments = await context.JobApplicationComments.Where(c => c.JobApplicationId == application.Id).ToListAsync();
+        Assert.Single(comments);
+        Assert.Equal("[Offered Decision]: Outstanding demo presentation on Shakespearean literature. Selected for Senior Wing.", comments[0].Comment);
     }
 }

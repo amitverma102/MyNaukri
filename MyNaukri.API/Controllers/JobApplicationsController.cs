@@ -383,6 +383,16 @@ public class JobApplicationsController : ControllerBase
         if (application == null) return NotFound("Application not found or no permission.");
 
         application.Status = request.Status;
+        if (!string.IsNullOrWhiteSpace(request.Note))
+        {
+            var comment = new JobApplicationComment
+            {
+                JobApplicationId = id,
+                UserId = userId,
+                Comment = $"[{request.Status} Decision]: {request.Note.Trim()}"
+            };
+            _context.JobApplicationComments.Add(comment);
+        }
         await _context.SaveChangesAsync();
 
         // Dispatch push notification to candidate asynchronously
@@ -425,6 +435,7 @@ public class JobApplicationsController : ControllerBase
         public string? InterviewLink { get; set; }
         public string? InterviewVenue { get; set; }
         public string? InterviewDetails { get; set; }
+        public string? RescheduleReason { get; set; }
     }
 
     [HttpPatch("{id}/schedule-interview")]
@@ -447,12 +458,27 @@ public class JobApplicationsController : ControllerBase
             
         if (application == null) return NotFound("Application not found or no permission.");
 
+        bool isReschedule = application.InterviewDate.HasValue;
         application.Status = ApplicationStatus.InterviewScheduled;
         application.InterviewDate = request.InterviewDate;
         application.InterviewMode = request.InterviewMode;
         application.InterviewLink = request.InterviewMode == InterviewMode.Online ? request.InterviewLink : null;
         application.InterviewVenue = request.InterviewMode == InterviewMode.InPerson ? request.InterviewVenue : null;
         application.InterviewDetails = request.InterviewDetails;
+
+        if (isReschedule)
+        {
+            var rescheduleNote = !string.IsNullOrWhiteSpace(request.RescheduleReason)
+                ? $"[Interview Rescheduled to {ToIst(request.InterviewDate):dd-MM-yyyy, hh:mm tt} IST]: {request.RescheduleReason.Trim()}"
+                : $"[Interview Rescheduled to {ToIst(request.InterviewDate):dd-MM-yyyy, hh:mm tt} IST]";
+
+            _context.JobApplicationComments.Add(new JobApplicationComment
+            {
+                JobApplicationId = id,
+                UserId = userId,
+                Comment = rescheduleNote
+            });
+        }
         
         await _context.SaveChangesAsync();
 
@@ -460,11 +486,16 @@ public class JobApplicationsController : ControllerBase
         var candidateName = $"{application.Candidate.User.FirstName} {application.Candidate.User.LastName}".Trim();
         var interviewDateIst = ToIst(request.InterviewDate);
 
+        var notifTitle = isReschedule ? "Interview Rescheduled!" : "Interview Scheduled!";
+        var notifBody = isReschedule
+            ? $"Your interview for '{application.Job.Title}' has been rescheduled to {interviewDateIst:dd-MM-yyyy, hh:mm tt} IST."
+            : $"An interview for '{application.Job.Title}' is scheduled on {interviewDateIst:dd-MM-yyyy, hh:mm tt} IST.";
+
         // Dispatch push notification asynchronously
         _ = _pushService.SendPushNotificationAsync(
             application.Candidate.UserId,
-            "Interview Scheduled!",
-            $"An interview for '{application.Job.Title}' is scheduled on {interviewDateIst:dd-MM-yyyy, hh:mm tt} IST."
+            notifTitle,
+            notifBody
         );
 
         // Generate ICS Calendar Invite
@@ -476,16 +507,17 @@ public class JobApplicationsController : ControllerBase
             _ => "TBD"
         };
 
-        var icsDescription = $"Interview for {application.Job.Title} at {institutionName}\n" +
+        var icsDescription = $"{(isReschedule ? "Updated Interview" : "Interview")} for {application.Job.Title} at {institutionName}\n" +
                              $"Date & Time: {interviewDateIst:dd-MM-yyyy, hh:mm tt} IST\n" +
                              $"Mode: {request.InterviewMode}\n" +
                              (!string.IsNullOrWhiteSpace(request.InterviewLink) ? $"Meeting Link: {request.InterviewLink}\n" : "") +
                              (!string.IsNullOrWhiteSpace(request.InterviewVenue) ? $"Venue: {request.InterviewVenue}\n" : "") +
-                             (!string.IsNullOrWhiteSpace(request.InterviewDetails) ? $"Details/Instructions: {request.InterviewDetails}\n" : "");
+                             (!string.IsNullOrWhiteSpace(request.InterviewDetails) ? $"Details/Instructions: {request.InterviewDetails}\n" : "") +
+                             (isReschedule && !string.IsNullOrWhiteSpace(request.RescheduleReason) ? $"Reschedule Note: {request.RescheduleReason}\n" : "");
 
         var icsContent = _calendarService.GenerateIcsContent(
             eventId: application.Id.ToString(),
-            title: $"Interview: {application.Job.Title} - {institutionName}",
+            title: $"{(isReschedule ? "Rescheduled: " : "Interview: ")}{application.Job.Title} - {institutionName}",
             description: icsDescription,
             locationOrLink: locationOrLink,
             startDateTimeUtc: request.InterviewDate,
@@ -506,12 +538,14 @@ public class JobApplicationsController : ControllerBase
                 mode: request.InterviewMode,
                 meetingLink: request.InterviewLink,
                 venue: request.InterviewVenue,
-                details: request.InterviewDetails
+                details: request.InterviewDetails,
+                isReschedule: isReschedule,
+                rescheduleReason: request.RescheduleReason
             );
 
             _ = _notificationService.SendEmailAsync(
                 to: application.Candidate.User.Email,
-                subject: $"Interview Scheduled: {application.Job.Title} - {institutionName}",
+                subject: $"{(isReschedule ? "Interview Rescheduled" : "Interview Scheduled")}: {application.Job.Title} - {institutionName}",
                 body: emailHtml,
                 isHtml: true,
                 attachmentBytes: icsBytes,
@@ -694,7 +728,9 @@ public class JobApplicationsController : ControllerBase
         InterviewMode mode,
         string? meetingLink,
         string? venue,
-        string? details)
+        string? details,
+        bool isReschedule = false,
+        string? rescheduleReason = null)
     {
         var interviewDateIst = ToIst(interviewDate);
         var modeBadge = mode switch
@@ -710,7 +746,7 @@ public class JobApplicationsController : ControllerBase
         {
             modeSpecificSection = $@"
               <div style='margin-top: 16px; padding: 14px 18px; background-color: #eff6ff; border-radius: 8px; border: 1px solid #bfdbfe;'>
-                <div style='font-size: 13px; font-weight: bold; color: #1e40af; margin-bottom: 6px;'>🔗 Meeting Link</div>
+                <div style='font-size: 13px; font-weight bold; color: #1e40af; margin-bottom: 6px;'>🔗 Meeting Link</div>
                 <div style='margin-bottom: 12px;'>
                   <a href='{meetingLink}' target='_blank' style='display: inline-block; padding: 10px 20px; background-color: #0f766e; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 6px;'>Join Video Interview</a>
                 </div>
@@ -741,13 +777,23 @@ public class JobApplicationsController : ControllerBase
                  </div>"
             : "";
 
+        var rescheduleBanner = isReschedule
+            ? $@"<div style='background-color: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px;'>
+                   <div style='color: #92400e; font-weight: bold; font-size: 14px;'>⚠️ Notice: Interview Rescheduled</div>
+                   <div style='color: #78350f; font-size: 13px; margin-top: 4px; line-height: 1.5;'>
+                     Your interview schedule for <strong>{jobTitle}</strong> has been updated by the institution. Please review the updated date, time, and instructions below.
+                     {(!string.IsNullOrWhiteSpace(rescheduleReason) ? $"<div style='margin-top: 6px; font-style: italic; color: #92400e;'>Reason: {rescheduleReason}</div>" : "")}
+                   </div>
+                 </div>"
+            : "";
+
         return $@"
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset='utf-8'>
   <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-  <title>Interview Scheduled</title>
+  <title>{(isReschedule ? "Interview Rescheduled" : "Interview Scheduled")}</title>
 </head>
 <body style='margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; color: #1e293b;'>
   <div style='max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);'>
@@ -755,23 +801,27 @@ public class JobApplicationsController : ControllerBase
     <!-- Header Banner -->
     <div style='background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%); padding: 28px 32px; color: #ffffff;'>
       <div style='font-size: 22px; font-weight: bold; letter-spacing: 0.5px;'>EduKey360</div>
-      <div style='font-size: 13px; opacity: 0.9; margin-top: 4px;'>Interview Invitation</div>
+      <div style='font-size: 13px; opacity: 0.9; margin-top: 4px;'>{(isReschedule ? "Updated Interview Schedule" : "Interview Invitation")}</div>
     </div>
 
     <!-- Body Content -->
     <div style='padding: 32px;'>
+      {rescheduleBanner}
+
       <div style='display: inline-block; padding: 6px 14px; background-color: {modeBadge.Item2}; color: {modeBadge.Item3}; font-size: 13px; font-weight: 700; border-radius: 9999px; margin-bottom: 16px;'>
         {modeBadge.Item1}
       </div>
 
-      <h2 style='margin: 0 0 16px 0; color: #0f172a; font-size: 20px; font-weight: 700;'>Interview Scheduled: {jobTitle}</h2>
+      <h2 style='margin: 0 0 16px 0; color: #0f172a; font-size: 20px; font-weight: 700;'>{(isReschedule ? "Interview Rescheduled: " : "Interview Scheduled: ")}{jobTitle}</h2>
       
       <p style='font-size: 15px; line-height: 1.6; color: #334155; margin: 0 0 20px 0;'>
         Dear <strong>{candidateName}</strong>,
       </p>
 
       <p style='font-size: 15px; line-height: 1.6; color: #334155; margin: 0 0 20px 0;'>
-        We are pleased to inform you that your interview for <strong>{jobTitle}</strong> at <strong>{institutionName}</strong> has been scheduled. Please find the complete details below:
+        {(isReschedule 
+          ? $"Please note that your interview for <strong>{jobTitle}</strong> at <strong>{institutionName}</strong> has been rescheduled to the updated timing below:"
+          : $"We are pleased to inform you that your interview for <strong>{jobTitle}</strong> at <strong>{institutionName}</strong> has been scheduled. Please find the complete details below:")}
       </p>
 
       <!-- Interview Card -->

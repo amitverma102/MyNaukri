@@ -191,6 +191,17 @@ export default function RecruiterDashboard() {
   const [interviewVenue, setInterviewVenue] = useState('');
   const [interviewDetails, setInterviewDetails] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [rescheduleCandidateName, setRescheduleCandidateName] = useState('');
+  const [rescheduleReason, setRescheduleReason] = useState('');
+  const [isSubmittingSchedule, setIsSubmittingSchedule] = useState(false);
+
+  // Recruiter Decision Modal (Offer / Reject with comments)
+  const [isDecisionModalOpen, setIsDecisionModalOpen] = useState(false);
+  const [decisionApp, setDecisionApp] = useState<JobApplication | null>(null);
+  const [decisionStatus, setDecisionStatus] = useState<'Offered' | 'Rejected'>('Offered');
+  const [decisionComment, setDecisionComment] = useState('');
+  const [isSubmittingDecision, setIsSubmittingDecision] = useState(false);
   const [viewingApplication, setViewingApplication] = useState<JobApplication | null>(null);
 
   // Resdex State
@@ -475,9 +486,9 @@ export default function RecruiterDashboard() {
     }
   };
 
-  const updateApplicationStatus = async (appId: string, status: string) => {
+  const updateApplicationStatus = async (appId: string, status: string, note?: string) => {
     try {
-      await api.patch(`/jobapplications/${appId}/status`, { status });
+      await api.patch(`/jobapplications/${appId}/status`, { status, note: note || undefined });
       if (selectedJobId && isApplicantsModalOpen) {
         openApplicantsModal(selectedJobId);
       }
@@ -487,25 +498,52 @@ export default function RecruiterDashboard() {
     }
   };
 
-  const openScheduleModal = (appId: string) => {
+  const formatForDateTimeLocal = (dateStr: string | null | undefined): string => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const openScheduleModal = (appId: string, existingApp?: JobApplication) => {
     setSelectedApplicationId(appId);
-    setInterviewDate('');
-    setInterviewMode('Online');
-    setInterviewLink('');
-    setInterviewVenue('');
-    setInterviewDetails('');
+    if (existingApp && (existingApp.interviewDate || existingApp.status === 'InterviewScheduled')) {
+      setIsRescheduling(true);
+      setRescheduleCandidateName(existingApp.candidateName || '');
+      setInterviewDate(formatForDateTimeLocal(existingApp.interviewDate));
+      const mode = existingApp.interviewMode === 1 || existingApp.interviewMode === 'InPerson' ? 'InPerson'
+                 : existingApp.interviewMode === 2 || existingApp.interviewMode === 'Telephonic' ? 'Telephonic'
+                 : 'Online';
+      setInterviewMode(mode);
+      setInterviewLink(existingApp.interviewLink || '');
+      setInterviewVenue(existingApp.interviewVenue || '');
+      setInterviewDetails(existingApp.interviewDetails || '');
+      setRescheduleReason('');
+    } else {
+      setIsRescheduling(false);
+      setRescheduleCandidateName(existingApp?.candidateName || '');
+      setInterviewDate('');
+      setInterviewMode('Online');
+      setInterviewLink('');
+      setInterviewVenue('');
+      setInterviewDetails('');
+      setRescheduleReason('');
+    }
     setIsScheduleModalOpen(true);
   };
 
   const scheduleInterview = async () => {
     if (!selectedApplicationId || !interviewDate) return;
     try {
+      setIsSubmittingSchedule(true);
       await api.patch(`/jobapplications/${selectedApplicationId}/schedule-interview`, {
         interviewDate: new Date(interviewDate).toISOString(),
         interviewMode,
         interviewLink: interviewMode === 'Online' ? interviewLink : null,
         interviewVenue: interviewMode === 'InPerson' ? interviewVenue : null,
-        interviewDetails
+        interviewDetails,
+        rescheduleReason: isRescheduling ? rescheduleReason : undefined
       });
       setIsScheduleModalOpen(false);
       if (selectedJobId) {
@@ -514,6 +552,30 @@ export default function RecruiterDashboard() {
       fetchInterviews();
     } catch (err) {
       console.error('Failed to schedule interview', err);
+    } finally {
+      setIsSubmittingSchedule(false);
+    }
+  };
+
+  const openDecisionModal = (app: JobApplication, status: 'Offered' | 'Rejected') => {
+    setDecisionApp(app);
+    setDecisionStatus(status);
+    setDecisionComment('');
+    setIsDecisionModalOpen(true);
+  };
+
+  const submitDecision = async () => {
+    if (!decisionApp) return;
+    try {
+      setIsSubmittingDecision(true);
+      await updateApplicationStatus(decisionApp.id, decisionStatus, decisionComment);
+      setIsDecisionModalOpen(false);
+      setDecisionApp(null);
+      setDecisionComment('');
+    } catch (err) {
+      console.error('Failed to submit decision', err);
+    } finally {
+      setIsSubmittingDecision(false);
     }
   };
 
@@ -917,7 +979,7 @@ export default function RecruiterDashboard() {
               <TableCell sx={{ fontWeight: 'bold', py: 2 }}>Status</TableCell>
               <TableCell sx={{ fontWeight: 'bold', py: 2 }}>Mode & Venue / Link</TableCell>
               <TableCell sx={{ fontWeight: 'bold', py: 2 }}>Notes / Details</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 'bold', py: 2 }}>Decisions (Result)</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold', py: 2 }}>Actions & Decisions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -1049,28 +1111,52 @@ export default function RecruiterDashboard() {
                       {app.interviewDetails || '-'}
                     </Typography>
                   </TableCell>
-                  <TableCell align="right">
-                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                      <Tooltip title="Offer Job">
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <Tooltip title="Reschedule this interview with a new date, time, or mode">
+                        <Button 
+                          variant="outlined" 
+                          color="primary" 
+                          size="small" 
+                          startIcon={<CalendarMonthIcon sx={{ fontSize: '15px !important' }} />} 
+                          onClick={() => openScheduleModal(app.id, app)}
+                          sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2, fontSize: '0.78rem' }}
+                        >
+                          Reschedule
+                        </Button>
+                      </Tooltip>
+                      <Tooltip title="View evaluation history or add notes for this candidate">
+                        <Button 
+                          variant="outlined" 
+                          color="info" 
+                          size="small" 
+                          startIcon={<CommentIcon sx={{ fontSize: '15px !important' }} />} 
+                          onClick={() => openCommentsModal(app.id)}
+                          sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2, fontSize: '0.78rem' }}
+                        >
+                          Comments
+                        </Button>
+                      </Tooltip>
+                      <Tooltip title="Make Job Offer with evaluation comments">
                         <Button 
                           variant="contained" 
                           color="success" 
                           size="small" 
-                          startIcon={<CheckCircleIcon />} 
-                          onClick={() => updateApplicationStatus(app.id, 'Offered')}
-                          sx={{ textTransform: 'none', fontWeight: 600, minWidth: 80, borderRadius: 2 }}
+                          startIcon={<CheckCircleIcon sx={{ fontSize: '15px !important' }} />} 
+                          onClick={() => openDecisionModal(app, 'Offered')}
+                          sx={{ textTransform: 'none', fontWeight: 600, minWidth: 76, borderRadius: 2, fontSize: '0.78rem' }}
                         >
                           Offer
                         </Button>
                       </Tooltip>
-                      <Tooltip title="Reject Application">
+                      <Tooltip title="Reject Application with feedback comments">
                         <Button 
                           variant="outlined" 
                           color="error" 
                           size="small" 
-                          startIcon={<CancelIcon />} 
-                          onClick={() => updateApplicationStatus(app.id, 'Rejected')}
-                          sx={{ textTransform: 'none', fontWeight: 600, minWidth: 80, borderRadius: 2 }}
+                          startIcon={<CancelIcon sx={{ fontSize: '15px !important' }} />} 
+                          onClick={() => openDecisionModal(app, 'Rejected')}
+                          sx={{ textTransform: 'none', fontWeight: 600, minWidth: 76, borderRadius: 2, fontSize: '0.78rem' }}
                         >
                           Reject
                         </Button>
@@ -2124,7 +2210,8 @@ export default function RecruiterDashboard() {
                           value={app.status} 
                           onChange={(e) => {
                             const val = e.target.value as string;
-                            if (val === 'InterviewScheduled') openScheduleModal(app.id);
+                            if (val === 'InterviewScheduled') openScheduleModal(app.id, app);
+                            else if (val === 'Offered' || val === 'Rejected') openDecisionModal(app, val as any);
                             else updateApplicationStatus(app.id, val);
                           }}
                           sx={{ minWidth: 130, borderRadius: 2 }}
@@ -2233,17 +2320,33 @@ export default function RecruiterDashboard() {
         </DialogActions>
       </Dialog>
 
-      {/* Schedule Interview Modal */}
-      <Dialog open={isScheduleModalOpen} onClose={() => setIsScheduleModalOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>Schedule Interview</DialogTitle>
+      {/* Schedule / Reschedule Interview Modal */}
+      <Dialog 
+        open={isScheduleModalOpen} 
+        onClose={() => !isSubmittingSchedule && setIsScheduleModalOpen(false)} 
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <CalendarMonthIcon color="primary" />
+          {isRescheduling 
+            ? `Reschedule Interview${rescheduleCandidateName ? `: ${rescheduleCandidateName}` : ''}`
+            : 'Schedule Interview'}
+        </DialogTitle>
         <DialogContent dividers>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }}>
-            <Typography variant="body2" color="textSecondary">
-              Select date, interview mode, and provide the venue or meeting link to invite the candidate. An automated invitation email and calendar invite (.ics) will be dispatched to the candidate.
-            </Typography>
+            {isRescheduling ? (
+              <Alert severity="info" sx={{ fontSize: '0.82rem' }}>
+                <strong>Rescheduling Notice:</strong> Selecting a new date/time or mode will automatically update the candidate&apos;s schedule, dispatch an updated calendar invite (.ics), and send a push notification.
+              </Alert>
+            ) : (
+              <Typography variant="body2" color="textSecondary">
+                Select date, interview mode, and provide the venue or meeting link to invite the candidate. An automated invitation email and calendar invite (.ics) will be dispatched to the candidate.
+              </Typography>
+            )}
             
             <TextField 
-              label="Interview Date & Time" 
+              label={isRescheduling ? "New Interview Date & Time" : "Interview Date & Time"}
               type="datetime-local" 
               value={interviewDate} 
               onChange={e => setInterviewDate(e.target.value)} 
@@ -2327,17 +2430,102 @@ export default function RecruiterDashboard() {
                 helperText="Any preparation guidelines or documents candidate should bring"
               />
             )}
+
+            {isRescheduling && (
+              <TextField 
+                label="Reason for Rescheduling (Optional)" 
+                placeholder="e.g. Panel member availability conflict; shifted by 2 hours..."
+                value={rescheduleReason} 
+                onChange={e => setRescheduleReason(e.target.value)} 
+                fullWidth 
+                multiline
+                rows={2}
+                helperText="This reason will be recorded in the candidate evaluation history and shared in notifications"
+              />
+            )}
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setIsScheduleModalOpen(false)} color="inherit">Cancel</Button>
+          <Button onClick={() => setIsScheduleModalOpen(false)} disabled={isSubmittingSchedule} color="inherit">Cancel</Button>
           <Button 
             variant="contained" 
             onClick={scheduleInterview} 
-            disabled={!interviewDate}
-            sx={{ borderRadius: 2 }}
+            disabled={!interviewDate || isSubmittingSchedule}
+            startIcon={isSubmittingSchedule ? <CircularProgress size={16} color="inherit" /> : <CalendarMonthIcon />}
+            sx={{ borderRadius: 2, fontWeight: 700 }}
           >
-            Confirm & Send Invitation
+            {isSubmittingSchedule ? 'Updating...' : isRescheduling ? 'Confirm & Reschedule' : 'Confirm & Send Invitation'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Recruiter Decision Modal (Offer / Reject with Comments) */}
+      <Dialog 
+        open={isDecisionModalOpen} 
+        onClose={() => !isSubmittingDecision && setIsDecisionModalOpen(false)} 
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle sx={{ 
+          fontWeight: 'bold', 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1,
+          color: decisionStatus === 'Offered' ? 'success.main' : 'error.main',
+          bgcolor: decisionStatus === 'Offered' ? '#f0fdf4' : '#fef2f2',
+          borderBottom: '1px solid',
+          borderColor: decisionStatus === 'Offered' ? '#bbf7d0' : '#fecaca'
+        }}>
+          {decisionStatus === 'Offered' ? <CheckCircleIcon /> : <CancelIcon />}
+          {decisionStatus === 'Offered' ? 'Make Job Offer' : 'Reject Application'}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2.5 }}>
+          {decisionApp && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2 }}>
+                <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600 }}>Candidate Details</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 700, mt: 0.5 }}>{decisionApp.candidateName}</Typography>
+                <Typography variant="body2" color="textSecondary">{decisionApp.candidateEmail} &bull; {decisionApp.jobTitle}</Typography>
+              </Paper>
+
+              <Alert severity={decisionStatus === 'Offered' ? 'success' : 'warning'} sx={{ fontSize: '0.85rem' }}>
+                {decisionStatus === 'Offered' 
+                  ? 'Candidate status will be updated to "Offered". The candidate will receive an immediate notification and status update email.'
+                  : 'Candidate status will be updated to "Rejected". The candidate will be respectfully notified via email and in-app update.'}
+              </Alert>
+
+              <TextField
+                label="Evaluation Notes / Decision Comments (Optional)"
+                placeholder={decisionStatus === 'Offered' 
+                  ? "e.g. Selected after excellent demo lecture. Offered salary package of 8 LPA..." 
+                  : "e.g. Candidate demonstrated good domain knowledge but lacks required senior secondary CBSE experience..."}
+                value={decisionComment}
+                onChange={(e) => setDecisionComment(e.target.value)}
+                multiline
+                rows={3}
+                fullWidth
+                helperText="Comments will be saved in the applicant's evaluation history and included in candidate notifications."
+              />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, borderTop: '1px solid #e2e8f0' }}>
+          <Button 
+            onClick={() => setIsDecisionModalOpen(false)} 
+            disabled={isSubmittingDecision}
+            color="inherit"
+          >
+            Cancel
+          </Button>
+          <Button 
+            variant="contained" 
+            color={decisionStatus === 'Offered' ? 'success' : 'error'}
+            onClick={submitDecision}
+            disabled={isSubmittingDecision}
+            startIcon={isSubmittingDecision ? <CircularProgress size={16} color="inherit" /> : (decisionStatus === 'Offered' ? <CheckCircleIcon /> : <CancelIcon />)}
+            sx={{ fontWeight: 700, borderRadius: 2 }}
+          >
+            {isSubmittingDecision ? 'Submitting...' : `Confirm ${decisionStatus === 'Offered' ? 'Offer' : 'Rejection'}`}
           </Button>
         </DialogActions>
       </Dialog>
