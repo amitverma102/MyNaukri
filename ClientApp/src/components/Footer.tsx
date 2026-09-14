@@ -1,4 +1,4 @@
-import { Box, Container, Grid, Typography, Link, Divider, Stack } from '@mui/material';
+import { Box, Container, Grid, Typography, Link, Divider, Stack, IconButton, Tooltip } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import FacebookIcon from '@mui/icons-material/Facebook';
 import InstagramIcon from '@mui/icons-material/Instagram';
@@ -20,19 +20,42 @@ export default function Footer() {
             <Typography variant="body2" color="text.secondary">
               Connect with us
             </Typography>
-            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-              <Link href="https://facebook.com/edu360" target="_blank" color="inherit" aria-label="Follow EduKey360 on Facebook">
-                <FacebookIcon />
-              </Link>
-              <Link href="https://instagram.com/edu360" target="_blank" color="inherit" aria-label="Follow EduKey360 on Instagram">
-                <InstagramIcon />
-              </Link>
-              <Link href="https://twitter.com/edu360" target="_blank" color="inherit" aria-label="Follow EduKey360 on X">
-                <TwitterIcon />
-              </Link>
-              <Link href="https://linkedin.com/company/edu360" target="_blank" color="inherit" aria-label="Follow EduKey360 on LinkedIn">
-                <LinkedInIcon />
-              </Link>
+            <Box sx={{ display: 'flex', gap: 1.5, mt: 2, alignItems: 'center' }}>
+              <Tooltip title="Facebook (Unavailable)">
+                <span>
+                  <IconButton disabled size="small" sx={{ p: 0.5, color: 'text.disabled', opacity: 0.38 }} aria-label="Facebook (disabled)">
+                    <FacebookIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Instagram (Unavailable)">
+                <span>
+                  <IconButton disabled size="small" sx={{ p: 0.5, color: 'text.disabled', opacity: 0.38 }} aria-label="Instagram (disabled)">
+                    <InstagramIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="X (Unavailable)">
+                <span>
+                  <IconButton disabled size="small" sx={{ p: 0.5, color: 'text.disabled', opacity: 0.38 }} aria-label="X (disabled)">
+                    <TwitterIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Follow EduKey360 on LinkedIn">
+                <IconButton 
+                  component="a" 
+                  href="https://linkedin.com/company/edu360" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  color="inherit" 
+                  size="small" 
+                  sx={{ p: 0.5, '&:hover': { color: '#0077b5' } }}
+                  aria-label="Follow EduKey360 on LinkedIn"
+                >
+                  <LinkedInIcon />
+                </IconButton>
+              </Tooltip>
             </Box>
           </Grid>
 
