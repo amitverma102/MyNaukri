@@ -992,14 +992,22 @@ export default function RecruiterDashboard() {
               return (
                 <TableRow key={app.id} hover sx={{ bgcolor: passed ? '#fffdf7' : 'inherit' }}>
                   <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Avatar sx={{ bgcolor: passed ? 'warning.main' : 'secondary.main' }}>
-                        {app.candidateName.charAt(0)}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Avatar sx={{ bgcolor: passed ? 'warning.main' : 'secondary.main', width: 34, height: 34, fontSize: '0.85rem' }}>
+                        {app.candidateName ? app.candidateName.charAt(0).toUpperCase() : '?'}
                       </Avatar>
-                      <Box>
-                        <Typography variant="body1" sx={{ fontWeight: 'bold' }}>{app.candidateName}</Typography>
-                        <Typography variant="caption" color="textSecondary">{app.candidateEmail}</Typography>
-                      </Box>
+                      <Tooltip title={app.candidateEmail || 'No email provided'} arrow>
+                        <Typography 
+                          variant="body2" 
+                          sx={{ 
+                            fontWeight: 700, 
+                            cursor: 'help',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {app.candidateName}
+                        </Typography>
+                      </Tooltip>
                     </Box>
                   </TableCell>
                   <TableCell>
