@@ -26,7 +26,7 @@ public class EduBotController : ControllerBase
             return BadRequest("Message cannot be empty.");
         }
 
-        // Populate authenticated context if present
+        // Securely populate authenticated context strictly from claims to prevent spoofing
         if (User?.Identity?.IsAuthenticated == true)
         {
             var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -34,12 +34,19 @@ public class EduBotController : ControllerBase
             {
                 request.UserId = userId;
             }
+            else
+            {
+                request.UserId = null;
+            }
 
             var role = User.FindFirst(ClaimTypes.Role)?.Value;
-            if (!string.IsNullOrWhiteSpace(role))
-            {
-                request.UserRole = role;
-            }
+            request.UserRole = !string.IsNullOrWhiteSpace(role) ? role : null;
+        }
+        else
+        {
+            // Anonymous / non-authenticated visitor
+            request.UserId = null;
+            request.UserRole = null;
         }
 
         var response = await _aiService.ChatWithEduBotAsync(request);

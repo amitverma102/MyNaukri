@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using MyNaukri.Application.DTOs.Jobs;
 using MyNaukri.Application.Interfaces;
 using MyNaukri.Domain.Enums;
@@ -8,6 +9,18 @@ namespace MyNaukri.Infrastructure.Services;
 
 public class MockAiService : IAiService
 {
+    private static readonly Regex RecruiterQueryPattern = new Regex(
+        @"\b(" +
+        @"(?:jobs?|openings?|vacanc(?:y|ies)|positions?)\s+(?:posted|created|listed|added|managed)\s+by\s+recruiter(?:\s+[\w\d\-]+)?|" +
+        @"(?:posted|created|listed|added|managed)\s+by\s+recruiter(?:\s+[\w\d\-]+)?|" +
+        @"jobs?\s+by\s+recruiter(?:\s+[\w\d\-]+)?|" +
+        @"(?:show|list|get|find|view|display|see)\s+(?:all\s+)?(?:the\s+)?jobs?\s+(?:of|for|from)\s+recruiter(?:\s+[\w\d\-]+)?|" +
+        @"recruiter\s*#?\d+(?:\s+[\w\d\-]+)?\s+(?:jobs?|openings?|vacanc(?:y|ies)|positions?)|" +
+        @"which\s+jobs?\s+(?:did|has)\s+recruiter\b|" +
+        @"(?:my\s+posted\s+jobs?|jobs?\s+posted\s+by\s+me|jobs?\s+i\s+posted|my\s+job\s+postings?)" +
+        @")\b",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled
+    );
     public Task<ParsedResumeDto> ParseResumeAsync(byte[] resumeData, string fileName)
     {
         // Mock delay to simulate AI processing
@@ -178,6 +191,76 @@ public class MockAiService : IAiService
                     "How Recruiters Find Educators on Edukey360"
                 }
             });
+        }
+
+        // Strict Recruiter-Specific Query Guardrails
+        if (RecruiterQueryPattern.IsMatch(lower))
+        {
+            if (request?.UserId == null || string.IsNullOrWhiteSpace(request?.UserRole))
+            {
+                return Task.FromResult(new EduBotChatResponseDto
+                {
+                    Response = "### 🔒 Access Restricted: Authentication Required\n\nInformation regarding jobs posted by specific recruiters is confidential and restricted to **authorized recruiters and institution administrators** within their hierarchy.\n\n- **Non-logged-in visitors** cannot query or view recruiter-specific job postings or internal recruiter records.\n- Please **log in** to your Edukey360 recruiter or administrator account to access your institution's postings.\n\nYou are welcome to browse all **public job vacancies** across institutions, search by subject or board, or explore jobs by institution name (e.g., *Jobs posted by KAPS Consultancy*)!",
+                    IsOffTopic = false,
+                    ActionType = "guardrail_denial",
+                    SuggestedPrompts = new List<string>
+                    {
+                        "Log in to access recruiter dashboard",
+                        "Explore all teaching openings",
+                        "Jobs posted by KAPS Consultancy"
+                    },
+                    MatchingJobs = null
+                });
+            }
+
+            var role = request.UserRole.Trim();
+            if (string.Equals(role, Role.Candidate.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                return Task.FromResult(new EduBotChatResponseDto
+                {
+                    Response = "### 🔒 Access Restricted: Recruiter Data Protection\n\nAs an educator/candidate on Edukey360, you have full access to explore and apply for all **public job openings** by institution, location, subject, or curriculum board.\n\nHowever, internal recruiter identifiers and recruiter-specific job management records are restricted to institutional administrators and recruiters within their hierarchy.\n\nWould you like to search for available vacancies by school, subject, or role instead?",
+                    IsOffTopic = false,
+                    ActionType = "guardrail_denial",
+                    SuggestedPrompts = new List<string>
+                    {
+                        "Search jobs by subject or location",
+                        "Explore all teaching openings"
+                    },
+                    MatchingJobs = null
+                });
+            }
+
+            if (string.Equals(role, Role.Recruiter.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                // In mock, if query mentions a specific other recruiter (e.g. recruiter 2) while current user is recruiter 1 / self
+                if (lower.Contains("recruiter 2") || lower.Contains("recruiter #2"))
+                {
+                    return Task.FromResult(new EduBotChatResponseDto
+                    {
+                        Response = "### 🔒 Access Restricted: Recruiter Data Isolation\n\nAs a recruiter, you have access exclusively to **your own posted jobs and applications**.\n\nYou do not have permission to view or manage jobs posted by other recruiters.\n\nYou can ask me to view **'my posted jobs'** or visit your **Recruiter Dashboard** to manage your current openings.",
+                        IsOffTopic = false,
+                        ActionType = "guardrail_denial",
+                        SuggestedPrompts = new List<string> { "Show my posted jobs", "Explore all teaching openings" },
+                        MatchingJobs = null
+                    });
+                }
+            }
+
+            if (string.Equals(role, Role.InstituteAdministrator.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                // In mock, if query targets a recruiter from another institute (e.g. recruiter 2)
+                if (lower.Contains("recruiter 2") || lower.Contains("recruiter #2"))
+                {
+                    return Task.FromResult(new EduBotChatResponseDto
+                    {
+                        Response = "### 🔒 Access Restricted: Institute Hierarchy Guardrail\n\nUnder Edukey360's data protection guardrails, you can only access job postings for **recruiters within your own institution hierarchy**.\n\nAccess to job postings from recruiters of other institutions is strictly prevented.\n\nYou can view and manage job postings created by recruiters registered under your institution from your **Admin Dashboard**.",
+                        IsOffTopic = false,
+                        ActionType = "guardrail_denial",
+                        SuggestedPrompts = new List<string> { "Show jobs posted by our recruiters", "Explore all teaching openings" },
+                        MatchingJobs = null
+                    });
+                }
+            }
         }
 
         // Job search intent

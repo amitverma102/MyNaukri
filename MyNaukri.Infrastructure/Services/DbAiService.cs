@@ -1064,6 +1064,19 @@ Respond ONLY with a valid JSON object matching this schema exactly:
         };
     }
 
+    private static readonly Regex RecruiterQueryPattern = new Regex(
+        @"\b(" +
+        @"(?:jobs?|openings?|vacanc(?:y|ies)|positions?)\s+(?:posted|created|listed|added|managed)\s+by\s+recruiter(?:\s+[\w\d\-]+)?|" +
+        @"(?:posted|created|listed|added|managed)\s+by\s+recruiter(?:\s+[\w\d\-]+)?|" +
+        @"jobs?\s+by\s+recruiter(?:\s+[\w\d\-]+)?|" +
+        @"(?:show|list|get|find|view|display|see)\s+(?:all\s+)?(?:the\s+)?jobs?\s+(?:of|for|from)\s+recruiter(?:\s+[\w\d\-]+)?|" +
+        @"recruiter\s*#?\d+(?:\s+[\w\d\-]+)?\s+(?:jobs?|openings?|vacanc(?:y|ies)|positions?)|" +
+        @"which\s+jobs?\s+(?:did|has)\s+recruiter\b|" +
+        @"(?:my\s+posted\s+jobs?|jobs?\s+posted\s+by\s+me|jobs?\s+i\s+posted|my\s+job\s+postings?)" +
+        @")\b",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled
+    );
+
     public async Task<EduBotChatResponseDto> ChatWithEduBotAsync(EduBotChatRequestDto request)
     {
         var message = (request?.Message ?? "").Trim();
@@ -1092,27 +1105,58 @@ Respond ONLY with a valid JSON object matching this schema exactly:
             return GenerateOffTopicResponse();
         }
 
-        // 2. Fetch relevant active jobs from DB if this query mentions jobs or subjects
-        var isJobQuery = IsJobRelatedQuery(lowerMsg);
+        // 2. Strict Guardrail Pre-Check for Recruiter-Specific Job Queries & Hierarchy Access
+        bool isRecruiterQuery = IsRecruiterSpecificJobQuery(lowerMsg);
         List<JobDto>? matchingJobs = null;
         string jobsContextSummary = "No specific matching jobs found.";
+        string? authorizedContextTitle = null;
 
-        if (isJobQuery)
+        if (isRecruiterQuery)
         {
-            matchingJobs = await FetchMatchingJobsAsync(lowerMsg);
-            if (matchingJobs != null && matchingJobs.Any())
+            var authCheck = await EvaluateRecruiterQueryAccessAsync(lowerMsg, request ?? new EduBotChatRequestDto { Message = message });
+            if (!authCheck.IsAllowed)
+            {
+                return GenerateRecruiterAccessDeniedResponse(authCheck.Reason, request?.UserRole);
+            }
+
+            authorizedContextTitle = authCheck.ContextTitle;
+            matchingJobs = authCheck.AllowedJobs;
+            if (matchingJobs.Any())
             {
                 var sb = new StringBuilder();
-                sb.AppendLine("Active jobs currently available in the Edukey360 database matching the user's inquiry:");
+                sb.AppendLine($"Authorized job postings within user's hierarchy ({authCheck.ContextTitle}):");
                 foreach (var j in matchingJobs)
                 {
                     sb.AppendLine($"- Title: {j.Title} | Institution: {j.CompanyName} | Location: {j.Location} | Board: {j.BoardAffiliation} | Subject: {j.SubjectDepartment} | Salary: ₹{j.MinSalary:N0} - ₹{j.MaxSalary:N0} | WorkMode: {j.WorkMode}");
                 }
                 jobsContextSummary = sb.ToString();
             }
+            else
+            {
+                jobsContextSummary = $"No active jobs currently found under {authCheck.ContextTitle}.";
+            }
+        }
+        else
+        {
+            // 3. Fetch relevant active jobs from DB if this query mentions public jobs, subjects, or institutions
+            var isJobQuery = IsJobRelatedQuery(lowerMsg);
+            if (isJobQuery)
+            {
+                matchingJobs = await FetchMatchingJobsAsync(lowerMsg);
+                if (matchingJobs != null && matchingJobs.Any())
+                {
+                    var sb = new StringBuilder();
+                    sb.AppendLine("Active public jobs currently available in the Edukey360 database matching the user's inquiry:");
+                    foreach (var j in matchingJobs)
+                    {
+                        sb.AppendLine($"- Title: {j.Title} | Institution: {j.CompanyName} | Location: {j.Location} | Board: {j.BoardAffiliation} | Subject: {j.SubjectDepartment} | Salary: ₹{j.MinSalary:N0} - ₹{j.MaxSalary:N0} | WorkMode: {j.WorkMode}");
+                    }
+                    jobsContextSummary = sb.ToString();
+                }
+            }
         }
 
-        // 3. Prepare Conversation History
+        // 4. Prepare Conversation History
         var historyText = new StringBuilder();
         if (request?.History != null && request.History.Any())
         {
@@ -1123,13 +1167,13 @@ Respond ONLY with a valid JSON object matching this schema exactly:
             }
         }
 
-        // 4. Construct Prompt for Gemini
+        // 5. Construct Prompt for Gemini
         var prompt = $@"
 You are EduBot, the friendly, intelligent, and highly knowledgeable AI Career & Education Assistant for Edukey360 (https://www.edukey360.com).
 Edukey360 is a dedicated recruitment and career ecosystem connecting educators, schools, colleges, universities, and EdTech platforms.
 
 === USER PROFILE / CONTEXT ===
-User Role: {(string.IsNullOrWhiteSpace(request?.UserRole) ? "Educator / Candidate / Recruiter" : request.UserRole)}
+User Role: {(string.IsNullOrWhiteSpace(request?.UserRole) ? "Educator / Candidate / Visitor" : request.UserRole)}
 
 === CONVERSATION RECENT HISTORY ===
 {(historyText.Length > 0 ? historyText.ToString() : "None")}
@@ -1148,14 +1192,19 @@ Your domain includes ONLY:
 4. Recruiter & School Assistance (Posting teaching jobs, Resdex educator profile search, AI resume matching, candidate shortlisting, hiring credits on Edukey360).
 5. Job Matching: Highlighting relevant active vacancies from the platform database context above.
 
-=== STRICT GUARDRAIL RULES ===
-If the user's message is NOT related to education, schools, colleges, edtech, teaching careers, pedagogical skills, academic hiring, or professional development in education (for example, queries about: cooking recipes, food, sports/cricket scores, movie reviews, celebrity gossip, cryptocurrency/crypto trading, politics/elections, personal medical symptoms/prescriptions, gaming):
-- You MUST politely decline to answer the off-topic request.
-- State that as EduBot, your expertise is solely focused on Education and EduTech careers.
-- Warmly invite them to ask about teaching careers, curriculum design, certifications, or hiring instead.
-- Set ""isOffTopic"": true.
-- Set ""actionType"": ""guardrail_denial"".
-- Provide suggested prompts related to education/teaching.
+=== STRICT GUARDRAIL & PRIVACY RULES ===
+1. Off-Topic Denial:
+   If the user's message is NOT related to education, schools, colleges, edtech, teaching careers, pedagogical skills, academic hiring, or professional development in education (for example: cooking recipes, food, cricket/sports scores, movies, crypto, politics, medical symptoms, gaming):
+   - Politely decline to answer.
+   - Set ""isOffTopic"": true.
+   - Set ""actionType"": ""guardrail_denial"".
+   - Provide suggested prompts related to education/teaching.
+
+2. Recruiter & Hierarchy Data Privacy:
+   - Recruiter-specific job management records are private. Users have access ONLY to their own data or users in their institution hierarchy.
+   - NEVER list or disclose jobs specific to a recruiter or recruiter identity to non-logged-in visitors, candidates, or users from other institutes.
+   - Queries seeking jobs posted by a specific recruiter must be denied if the user is unauthorized.
+   - Queries by public institution or consultancy name (e.g. 'jobs posted by KAPS Consultancy', 'jobs at Delhi Public School') are public and permitted for all users.
 
 === OUTPUT FORMAT ===
 Respond ONLY with a valid JSON object matching this schema exactly:
@@ -1173,7 +1222,7 @@ Respond ONLY with a valid JSON object matching this schema exactly:
         var result = await CallGeminiAndDeserializeAsync<EduBotChatResponseDto>(prompt);
         if (result != null && !string.IsNullOrWhiteSpace(result.Response))
         {
-            if (isJobQuery && matchingJobs != null && matchingJobs.Any())
+            if ((isRecruiterQuery || IsJobRelatedQuery(lowerMsg)) && matchingJobs != null && matchingJobs.Any())
             {
                 result.MatchingJobs = matchingJobs;
                 if (string.IsNullOrWhiteSpace(result.ActionType) || result.ActionType == "general")
@@ -1185,7 +1234,377 @@ Respond ONLY with a valid JSON object matching this schema exactly:
         }
 
         // Fallback rule-based engine
-        return GetFallbackEduBotResponse(request ?? new EduBotChatRequestDto { Message = message }, matchingJobs);
+        return GetFallbackEduBotResponse(request ?? new EduBotChatRequestDto { Message = message }, matchingJobs, isRecruiterQuery, authorizedContextTitle);
+    }
+
+    private static bool IsRecruiterSpecificJobQuery(string lower)
+    {
+        if (string.IsNullOrWhiteSpace(lower)) return false;
+        return RecruiterQueryPattern.IsMatch(lower);
+    }
+
+    private class RecruiterQueryAccessResult
+    {
+        public bool IsAllowed { get; set; }
+        public string Reason { get; set; } = string.Empty;
+        public string ContextTitle { get; set; } = string.Empty;
+        public List<JobDto> AllowedJobs { get; set; } = new();
+    }
+
+    private async Task<RecruiterQueryAccessResult> EvaluateRecruiterQueryAccessAsync(string lowerQuery, EduBotChatRequestDto request)
+    {
+        // 1. Non-logged-in visitor / anonymous
+        if (request?.UserId == null || string.IsNullOrWhiteSpace(request?.UserRole))
+        {
+            return new RecruiterQueryAccessResult
+            {
+                IsAllowed = false,
+                Reason = "NonLoggedIn"
+            };
+        }
+
+        var userRole = request.UserRole.Trim();
+
+        // 2. Candidate role cannot access recruiter-specific job lists
+        if (string.Equals(userRole, Role.Candidate.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            return new RecruiterQueryAccessResult
+            {
+                IsAllowed = false,
+                Reason = "CandidateRestricted"
+            };
+        }
+
+        // 3. SuperAdministrator: platform-wide access
+        if (string.Equals(userRole, Role.SuperAdministrator.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            var allRecruiters = await _context.Recruiters
+                .Include(r => r.User)
+                .Include(r => r.Institution)
+                .ToListAsync();
+
+            var targetRecruiter = FindTargetRecruiter(lowerQuery, allRecruiters);
+            List<Job> superAdminJobs;
+
+            if (targetRecruiter != null)
+            {
+                superAdminJobs = await _context.Jobs
+                    .Include(j => j.Institution)
+                    .Where(j => j.RecruiterId == targetRecruiter.Id && j.IsActive)
+                    .OrderByDescending(j => j.CreatedAt)
+                    .ToListAsync();
+            }
+            else
+            {
+                superAdminJobs = await _context.Jobs
+                    .Include(j => j.Institution)
+                    .Where(j => j.IsActive)
+                    .OrderByDescending(j => j.CreatedAt)
+                    .Take(10)
+                    .ToListAsync();
+            }
+
+            var recruiterName = targetRecruiter != null
+                ? $"{targetRecruiter.User?.FirstName} {targetRecruiter.User?.LastName}".Trim()
+                : "Recruiters";
+
+            return new RecruiterQueryAccessResult
+            {
+                IsAllowed = true,
+                ContextTitle = $"Jobs Posted by {recruiterName}",
+                AllowedJobs = superAdminJobs.Select(MapToJobDto).ToList()
+            };
+        }
+
+        // 4. Recruiter or CompanyHR: access only to their OWN jobs
+        if (string.Equals(userRole, Role.Recruiter.ToString(), StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(userRole, "CompanyHR", StringComparison.OrdinalIgnoreCase))
+        {
+            var currentRecruiter = await _context.Recruiters
+                .Include(r => r.User)
+                .Include(r => r.Institution)
+                .FirstOrDefaultAsync(r => r.UserId == request.UserId.Value);
+
+            if (currentRecruiter == null)
+            {
+                return new RecruiterQueryAccessResult
+                {
+                    IsAllowed = false,
+                    Reason = "RecruiterProfileNotFound"
+                };
+            }
+
+            bool isSelfQuery = IsSelfRecruiterQuery(lowerQuery, currentRecruiter);
+            if (!isSelfQuery)
+            {
+                return new RecruiterQueryAccessResult
+                {
+                    IsAllowed = false,
+                    Reason = "OtherRecruiterAccessDenied"
+                };
+            }
+
+            var myJobs = await _context.Jobs
+                .Include(j => j.Institution)
+                .Where(j => j.RecruiterId == currentRecruiter.Id && j.IsActive)
+                .OrderByDescending(j => j.CreatedAt)
+                .ToListAsync();
+
+            return new RecruiterQueryAccessResult
+            {
+                IsAllowed = true,
+                ContextTitle = "Your Posted Jobs",
+                AllowedJobs = myJobs.Select(MapToJobDto).ToList()
+            };
+        }
+
+        // 5. InstituteAdministrator: access only to recruiters in their own institution
+        if (string.Equals(userRole, Role.InstituteAdministrator.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            var adminProfile = await _context.InstituteAdminProfiles
+                .Include(p => p.Institution)
+                .FirstOrDefaultAsync(p => p.UserId == request.UserId.Value);
+
+            if (adminProfile == null)
+            {
+                return new RecruiterQueryAccessResult
+                {
+                    IsAllowed = false,
+                    Reason = "AdminProfileNotFound"
+                };
+            }
+
+            var instituteRecruiters = await _context.Recruiters
+                .Include(r => r.User)
+                .Include(r => r.Institution)
+                .Where(r => r.InstitutionId == adminProfile.InstitutionId)
+                .ToListAsync();
+
+            var matchedInHierarchy = FindTargetRecruiter(lowerQuery, instituteRecruiters);
+            if (matchedInHierarchy != null)
+            {
+                var targetJobs = await _context.Jobs
+                    .Include(j => j.Institution)
+                    .Where(j => j.RecruiterId == matchedInHierarchy.Id && j.IsActive)
+                    .OrderByDescending(j => j.CreatedAt)
+                    .ToListAsync();
+
+                var recruiterName = $"{matchedInHierarchy.User?.FirstName} {matchedInHierarchy.User?.LastName}".Trim();
+                if (string.IsNullOrWhiteSpace(recruiterName)) recruiterName = "Recruiter";
+
+                return new RecruiterQueryAccessResult
+                {
+                    IsAllowed = true,
+                    ContextTitle = $"Jobs Posted by {recruiterName} ({adminProfile.Institution?.Name})",
+                    AllowedJobs = targetJobs.Select(MapToJobDto).ToList()
+                };
+            }
+
+            // Check if query targets a recruiter belonging to another institution
+            var otherRecruiters = await _context.Recruiters
+                .Include(r => r.User)
+                .Include(r => r.Institution)
+                .Where(r => r.InstitutionId != adminProfile.InstitutionId)
+                .ToListAsync();
+
+            var otherRecruiter = FindTargetRecruiter(lowerQuery, otherRecruiters);
+            if (otherRecruiter != null)
+            {
+                return new RecruiterQueryAccessResult
+                {
+                    IsAllowed = false,
+                    Reason = "OtherInstituteRecruiterAccessDenied"
+                };
+            }
+
+            // General query for recruiters in this institution
+            var generalKeywords = new[] { "our", "institution", "institute", "school", "my", "posted by recruiter" };
+            if (generalKeywords.Any(k => lowerQuery.Contains(k)) || !instituteRecruiters.Any())
+            {
+                var instituteJobs = await _context.Jobs
+                    .Include(j => j.Institution)
+                    .Where(j => j.InstitutionId == adminProfile.InstitutionId && j.IsActive)
+                    .OrderByDescending(j => j.CreatedAt)
+                    .ToListAsync();
+
+                return new RecruiterQueryAccessResult
+                {
+                    IsAllowed = true,
+                    ContextTitle = $"Jobs in {adminProfile.Institution?.Name ?? "Your Institution"}",
+                    AllowedJobs = instituteJobs.Select(MapToJobDto).ToList()
+                };
+            }
+
+            return new RecruiterQueryAccessResult
+            {
+                IsAllowed = false,
+                Reason = "RecruiterNotInHierarchy"
+            };
+        }
+
+        return new RecruiterQueryAccessResult
+        {
+            IsAllowed = false,
+            Reason = "AccessRestricted"
+        };
+    }
+
+    private static bool IsSelfRecruiterQuery(string lowerQuery, Recruiter currentRecruiter)
+    {
+        var selfPhrases = new[] { "my", "by me", "i posted", "my jobs", "my posted jobs" };
+        if (selfPhrases.Any(p => lowerQuery.Contains(p)))
+        {
+            return true;
+        }
+
+        var fullName = $"{currentRecruiter.User?.FirstName} {currentRecruiter.User?.LastName}".Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(fullName) && lowerQuery.Contains(fullName))
+        {
+            return true;
+        }
+
+        var email = currentRecruiter.User?.Email?.ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(email) && lowerQuery.Contains(email))
+        {
+            return true;
+        }
+
+        var firstName = currentRecruiter.User?.FirstName?.ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(firstName) && firstName.Length > 2 && lowerQuery.Contains(firstName))
+        {
+            return true;
+        }
+
+        if (Regex.IsMatch(lowerQuery, @"\b(?:jobs?\s+posted\s+by\s+recruiter|jobs?\s+by\s+recruiter)\s*$", RegexOptions.IgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static Recruiter? FindTargetRecruiter(string lowerQuery, List<Recruiter> recruiters)
+    {
+        if (recruiters == null || !recruiters.Any()) return null;
+
+        // 1. Direct name / email matching
+        foreach (var r in recruiters)
+        {
+            var fullName = $"{r.User?.FirstName} {r.User?.LastName}".Trim().ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(fullName) && lowerQuery.Contains(fullName))
+            {
+                return r;
+            }
+
+            var email = r.User?.Email?.ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(email) && lowerQuery.Contains(email))
+            {
+                return r;
+            }
+
+            var firstName = r.User?.FirstName?.ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(firstName) && firstName.Length > 2 && lowerQuery.Contains(firstName))
+            {
+                return r;
+            }
+        }
+
+        // 2. Numbered match (e.g. "recruiter 1", "recruiter #1", "recruiter 2", "recruiter1")
+        var match = Regex.Match(lowerQuery, @"\brecruiter\s*#?(\d+)\b", RegexOptions.IgnoreCase);
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var num))
+        {
+            var byNameNumber = recruiters.FirstOrDefault(r =>
+                (r.User?.Email != null && r.User.Email.ToLowerInvariant().Contains($"recruiter{num}")) ||
+                (r.User?.LastName != null && r.User.LastName.Trim().Equals(num.ToString(), StringComparison.OrdinalIgnoreCase)) ||
+                (r.User?.FirstName != null && r.User.FirstName.Trim().Equals($"recruiter {num}", StringComparison.OrdinalIgnoreCase)));
+            if (byNameNumber != null) return byNameNumber;
+
+            if (num >= 1 && num <= recruiters.Count)
+            {
+                return recruiters.OrderBy(r => r.CreatedAt).ElementAt(num - 1);
+            }
+        }
+
+        return null;
+    }
+
+    private static JobDto MapToJobDto(Job j)
+    {
+        return new JobDto
+        {
+            Id = j.Id,
+            Title = j.Title,
+            Description = j.Description,
+            Requirements = j.Requirements,
+            MinSalary = j.MinSalary,
+            MaxSalary = j.MaxSalary,
+            JobType = j.JobType,
+            Location = j.Location,
+            IsActive = j.IsActive,
+            RecruiterId = j.RecruiterId,
+            InstitutionId = j.InstitutionId,
+            CreatedAt = j.CreatedAt,
+            CompanyName = j.Institution?.Name ?? "Educational Institution",
+            InstitutionLogoUrl = j.Institution?.LogoUrl,
+            BoardAffiliation = j.BoardAffiliation,
+            SubjectDepartment = j.SubjectDepartment,
+            WorkMode = j.WorkMode
+        };
+    }
+
+    private static EduBotChatResponseDto GenerateRecruiterAccessDeniedResponse(string reason, string? userRole)
+    {
+        string message;
+        var suggested = new List<string>
+        {
+            "Explore all teaching openings",
+            "Jobs posted by KAPS Consultancy",
+            "How do recruiters search teacher profiles?",
+            "What skills do CBSE schools prioritize?"
+        };
+
+        if (reason == "NonLoggedIn")
+        {
+            message = "### 🔒 Access Restricted: Authentication Required\n\n" +
+                      "Information regarding jobs posted by specific recruiters is confidential and restricted to **authorized recruiters and institution administrators** within their hierarchy.\n\n" +
+                      "- **Non-logged-in visitors** cannot query or view recruiter-specific job postings or internal recruiter records.\n" +
+                      "- Please **log in** to your Edukey360 recruiter or administrator account to access your institution's postings.\n\n" +
+                      "You are welcome to browse all **public job vacancies** across institutions, search by subject or board, or explore jobs by institution name (e.g., *Jobs posted by KAPS Consultancy*)!";
+            suggested.Insert(0, "Log in to access recruiter dashboard");
+        }
+        else if (reason == "CandidateRestricted")
+        {
+            message = "### 🔒 Access Restricted: Recruiter Data Protection\n\n" +
+                      "As an educator/candidate on Edukey360, you have full access to explore and apply for all **public job openings** by institution, location, subject, or curriculum board.\n\n" +
+                      "However, internal recruiter identifiers and recruiter-specific job management records are restricted to institutional administrators and recruiters within their hierarchy.\n\n" +
+                      "Would you like to search for available vacancies by school, subject, or role instead?";
+            suggested.Insert(0, "Search jobs by subject or location");
+        }
+        else if (reason == "OtherInstituteRecruiterAccessDenied" || reason == "RecruiterNotInHierarchy")
+        {
+            message = "### 🔒 Access Restricted: Institute Hierarchy Guardrail\n\n" +
+                      "Under Edukey360's data protection guardrails, you can only access job postings for **recruiters within your own institution hierarchy**.\n\n" +
+                      "Access to job postings from recruiters of other institutions is strictly prevented.\n\n" +
+                      "You can view and manage job postings created by recruiters registered under your institution from your **Admin Dashboard**.";
+            suggested.Insert(0, "Show jobs posted by our recruiters");
+        }
+        else // OtherRecruiterAccessDenied
+        {
+            message = "### 🔒 Access Restricted: Recruiter Data Isolation\n\n" +
+                      "As a recruiter, you have access exclusively to **your own posted jobs and applications**.\n\n" +
+                      "You do not have permission to view or manage jobs posted by other recruiters.\n\n" +
+                      "You can ask me to view **'my posted jobs'** or visit your **Recruiter Dashboard** to manage your current openings.";
+            suggested.Insert(0, "Show my posted jobs");
+        }
+
+        return new EduBotChatResponseDto
+        {
+            Response = message,
+            IsOffTopic = false,
+            ActionType = "guardrail_denial",
+            SuggestedPrompts = suggested.Distinct().Take(4).ToList(),
+            MatchingJobs = null
+        };
     }
 
     private static bool IsOffTopicQuery(string lower)
@@ -1260,7 +1679,7 @@ Respond ONLY with a valid JSON object matching this schema exactly:
             var scored = activeJobs.Select(job =>
             {
                 int score = 0;
-                var haystack = $"{job.Title} {job.SubjectDepartment} {job.BoardAffiliation} {job.Location} {job.Keywords} {job.Description}".ToLowerInvariant();
+                var haystack = $"{job.Title} {job.Institution?.Name} {job.SubjectDepartment} {job.BoardAffiliation} {job.Location} {job.Keywords} {job.Description}".ToLowerInvariant();
                 foreach (var w in words)
                 {
                     if (haystack.Contains(w)) score += 2;
@@ -1273,31 +1692,7 @@ Respond ONLY with a valid JSON object matching this schema exactly:
             .Select(x => x.Job)
             .ToList();
 
-            if (!scored.Any())
-            {
-                scored = activeJobs.Take(3).ToList();
-            }
-
-            return scored.Select(j => new JobDto
-            {
-                Id = j.Id,
-                Title = j.Title,
-                Description = j.Description,
-                Requirements = j.Requirements,
-                MinSalary = j.MinSalary,
-                MaxSalary = j.MaxSalary,
-                JobType = j.JobType,
-                Location = j.Location,
-                IsActive = j.IsActive,
-                RecruiterId = j.RecruiterId,
-                InstitutionId = j.InstitutionId,
-                CreatedAt = j.CreatedAt,
-                CompanyName = j.Institution?.Name ?? "Educational Institution",
-                InstitutionLogoUrl = j.Institution?.LogoUrl,
-                BoardAffiliation = j.BoardAffiliation,
-                SubjectDepartment = j.SubjectDepartment,
-                WorkMode = j.WorkMode
-            }).ToList();
+            return scored.Select(MapToJobDto).ToList();
         }
         catch (Exception ex)
         {
@@ -1306,7 +1701,11 @@ Respond ONLY with a valid JSON object matching this schema exactly:
         }
     }
 
-    private EduBotChatResponseDto GetFallbackEduBotResponse(EduBotChatRequestDto request, List<JobDto>? matchingJobs)
+    private EduBotChatResponseDto GetFallbackEduBotResponse(
+        EduBotChatRequestDto request, 
+        List<JobDto>? matchingJobs,
+        bool isRecruiterQuery = false,
+        string? authorizedContextTitle = null)
     {
         var msg = (request?.Message ?? "").Trim().ToLowerInvariant();
 
@@ -1316,7 +1715,45 @@ Respond ONLY with a valid JSON object matching this schema exactly:
             return GenerateOffTopicResponse();
         }
 
-        // 2. Job search response
+        // 2. Authorized recruiter jobs response
+        if (isRecruiterQuery && !string.IsNullOrWhiteSpace(authorizedContextTitle))
+        {
+            if (matchingJobs != null && matchingJobs.Any())
+            {
+                var jobListings = string.Join("\n", matchingJobs.Select(j =>
+                    $"- **{j.Title}** at {j.CompanyName} ({j.BoardAffiliation ?? "CBSE/ICSE"}, {j.Location}, ₹{(j.MinSalary ?? 0)/100000:0.#} - {(j.MaxSalary ?? 0)/100000:0.#} LPA) [Active]"));
+
+                return new EduBotChatResponseDto
+                {
+                    Response = $"### 📋 {authorizedContextTitle}\n\nHere are the active job postings within your authorized hierarchy:\n\n{jobListings}\n\nYou can review applicant details or manage these positions from your dashboard.",
+                    IsOffTopic = false,
+                    ActionType = "job_search",
+                    MatchingJobs = matchingJobs,
+                    SuggestedPrompts = new List<string>
+                    {
+                        "Post a new teaching job",
+                        "View applicant submissions",
+                        "How to search profiles on Resdex"
+                    }
+                };
+            }
+
+            return new EduBotChatResponseDto
+            {
+                Response = $"### 📋 {authorizedContextTitle}\n\nNo active jobs were found for this query in your institution hierarchy. You can post a new vacancy from your dashboard.",
+                IsOffTopic = false,
+                ActionType = "job_search",
+                MatchingJobs = new List<JobDto>(),
+                SuggestedPrompts = new List<string>
+                {
+                    "Post a new teaching job",
+                    "How to search profiles on Resdex",
+                    "How do hiring credits work?"
+                }
+            };
+        }
+
+        // 3. Public job search response
         if (matchingJobs != null && matchingJobs.Any())
         {
             var jobListings = string.Join("\n", matchingJobs.Select(j => 
@@ -1337,7 +1774,7 @@ Respond ONLY with a valid JSON object matching this schema exactly:
             };
         }
 
-        // 3. Skills / Certifications query
+        // 4. Skills / Certifications query
         if (msg.Contains("ctet") || msg.Contains("b.ed") || msg.Contains("net") || msg.Contains("skill") || msg.Contains("certification") || msg.Contains("upgrade"))
         {
             return new EduBotChatResponseDto
@@ -1354,7 +1791,7 @@ Respond ONLY with a valid JSON object matching this schema exactly:
             };
         }
 
-        // 4. Recruiter query
+        // 5. Recruiter query
         if (msg.Contains("recruiter") || msg.Contains("hire") || msg.Contains("resdex") || msg.Contains("candidate") || msg.Contains("post job") || msg.Contains("credit"))
         {
             return new EduBotChatResponseDto
@@ -1371,7 +1808,7 @@ Respond ONLY with a valid JSON object matching this schema exactly:
             };
         }
 
-        // 5. Default career guide
+        // 6. Default career guide
         return new EduBotChatResponseDto
         {
             Response = "Hello! I am **EduBot**, your dedicated AI Career and Education Assistant on **Edukey360**! 🎓\n\nI can help you navigate the modern education ecosystem:\n- 🎯 **Find Teaching & EduTech Jobs** tailored to your subject, board, and location.\n- 📈 **Career Pathways** for Educators, Instructional Designers, STEM Trainers, and Academic Counselors.\n- 💡 **Skills Upgradation** (CTET, B.Ed, NET, LMS mastery, lesson planning, and demo interview tips).\n- 🏫 **Recruiter Guidance** for schools and institutes looking to source qualified educators.\n\nWhat would you like assistance with today?",
