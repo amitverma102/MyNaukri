@@ -5,6 +5,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api, { getMediaUrl } from '../api/axios';
 import { useNavigate } from 'react-router-dom';
+import ChangePasswordSection from './common/ChangePasswordSection';
 
 export default function RecruiterProfile() {
   const queryClient = useQueryClient();
@@ -182,6 +183,9 @@ export default function RecruiterProfile() {
           </Box>
         </Box>
       </Paper>
+
+      {/* Security & Password Settings */}
+      <ChangePasswordSection sx={{ mt: 4 }} />
     </Container>
   );
 }

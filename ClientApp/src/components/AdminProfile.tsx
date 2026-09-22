@@ -14,6 +14,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api, { getMediaUrl } from '../api/axios';
+import ChangePasswordSection from './common/ChangePasswordSection';
 
 export default function AdminProfile() {
   const queryClient = useQueryClient();
@@ -355,6 +356,9 @@ export default function AdminProfile() {
           </Button>
         </Box>
       </Paper>
+
+      {/* Security & Password Settings */}
+      <ChangePasswordSection sx={{ mt: 4 }} />
     </Container>
   );
 }

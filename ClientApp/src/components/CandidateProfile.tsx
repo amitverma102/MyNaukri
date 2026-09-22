@@ -20,6 +20,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api, { API_BASE_URL, getMediaUrl } from '../api/axios';
 import { useNavigate } from 'react-router-dom';
+import ChangePasswordSection from './common/ChangePasswordSection';
 
 export default function CandidateProfile() {
   const queryClient = useQueryClient();
@@ -681,6 +682,9 @@ export default function CandidateProfile() {
           </Box>
         </Box>
       </Paper>
+
+      {/* Security & Password Settings */}
+      <ChangePasswordSection sx={{ mt: 4 }} />
 
       {/* DPDP Act 2023 & App Store Compliant Self-Serve Account Deletion */}
       <Paper variant="outlined" sx={{ mt: 4, p: 3, borderColor: 'error.light', bgcolor: 'rgba(211, 47, 47, 0.03)', borderRadius: 3 }}>

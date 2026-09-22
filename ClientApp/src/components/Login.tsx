@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Box, Button, TextField, Typography, Container, Alert, Link } from '@mui/material';
+import { Box, Button, TextField, Typography, Container, Alert, Link, IconButton, InputAdornment } from '@mui/material';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import api from '../api/axios';
@@ -8,6 +10,7 @@ import api from '../api/axios';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
@@ -118,9 +121,25 @@ export default function Login() {
             required
             fullWidth
             label="Password"
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label="toggle password visibility"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      edge="end"
+                      size="small"
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
           />
           <Button
             type="submit"

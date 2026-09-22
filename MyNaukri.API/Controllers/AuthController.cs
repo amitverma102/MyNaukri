@@ -389,6 +389,63 @@ public class AuthController : ControllerBase
         return Ok(new { Message = "Password reset successfully." });
     }
 
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto request)
+    {
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var userId)) return Unauthorized();
+
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null || !user.IsActive) return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(request.CurrentPassword))
+        {
+            return BadRequest("Current password is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            return BadRequest("New password is required.");
+        }
+
+        if (request.NewPassword.Length < 6)
+        {
+            return BadRequest("New password must be at least 6 characters long.");
+        }
+
+        if (!_passwordHasher.Verify(request.CurrentPassword, user.PasswordHash))
+        {
+            return BadRequest("Current password is incorrect.");
+        }
+
+        if (_passwordHasher.Verify(request.NewPassword, user.PasswordHash))
+        {
+            return BadRequest("New password cannot be the same as your current password.");
+        }
+
+        user.PasswordHash = _passwordHasher.Hash(request.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        try
+        {
+            var emailHtml = BuildPasswordChangedEmailHtml($"{user.FirstName} {user.LastName}".Trim());
+            await _notificationService.SendEmailAsync(
+                user.Email,
+                "EduKey360 - Password Changed Successfully",
+                emailHtml,
+                emailType: MyNaukri.Domain.Enums.EmailType.Default
+            );
+        }
+        catch
+        {
+            // Logging or non-blocking notification failure
+        }
+
+        return Ok(new { Message = "Password changed successfully." });
+    }
+
     /// <summary>
     /// Self-serve account deletion required by Apple App Store and Google Play guidelines, and India DPDP Act.
     /// Anonymizes user identifiers and revokes active sessions and push tokens.
@@ -587,6 +644,54 @@ public class AuthController : ControllerBase
                             <p style=""margin:0;font-weight:600;color:#64748b;"">EduKey360 — India's Premier Educational Careers Network</p>
                             <p style=""margin:4px 0 0 0;"">Connecting talented educators and leadership professionals with premier educational institutions.</p>
                             <p style=""margin:8px 0 0 0;"">Support: <a href=""mailto:support@edukey360.com"" style=""color:#0f766e;text-decoration:none;"">support@edukey360.com</a> &bull; <a href=""https://edukey360.com"" style=""color:#0f766e;text-decoration:none;"">www.edukey360.com</a></p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>";
+    }
+
+    private static string BuildPasswordChangedEmailHtml(string recipientName)
+    {
+        var name = string.IsNullOrWhiteSpace(recipientName) ? "User" : recipientName;
+        return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""utf-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>EduKey360 Password Changed</title>
+</head>
+<body style=""margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;"">
+    <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""background-color:#f1f5f9;padding:32px 16px;"">
+        <tr>
+            <td align=""center"">
+                <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""max-width:580px;background-color:#ffffff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.05);"">
+                    <tr>
+                        <td style=""background:linear-gradient(135deg, #0f766e 0%, #115e59 100%);padding:28px 32px;text-align:center;"">
+                            <h1 style=""margin:0;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:-0.5px;"">EduKey360</h1>
+                            <p style=""margin:4px 0 0 0;color:#99f6e4;font-size:13px;font-weight:500;"">Educational Careers &amp; Institutional Hiring</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style=""padding:32px;"">
+                            <h2 style=""margin:0 0 12px 0;color:#0f172a;font-size:18px;font-weight:600;"">Password Changed Successfully</h2>
+                            <p style=""margin:0 0 16px 0;color:#475569;font-size:14px;line-height:1.6;"">Hello {System.Net.WebUtility.HtmlEncode(name)},</p>
+                            <p style=""margin:0 0 24px 0;color:#475569;font-size:14px;line-height:1.6;"">The password for your EduKey360 account was recently changed. If you performed this change, no further action is needed.</p>
+                            <p style=""margin:0 0 12px 0;color:#e11d48;font-size:13px;line-height:1.5;"">
+                                <strong>Important Security Alert:</strong> If you did not make this change, please reset your password immediately or contact our support team at <a href=""mailto:support@edukey360.com"" style=""color:#0f766e;text-decoration:none;"">support@edukey360.com</a>.
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style=""background-color:#f8fafc;border-top:1px solid #e2e8f0;padding:24px 32px;text-align:center;font-size:12px;color:#94a3b8;line-height:1.6;"">
+                            <p style=""margin:0;font-weight:600;color:#64748b;"">EduKey360 — India's Premier Educational Careers Network</p>
+                            <p style=""margin:4px 0 0 0;"">Connecting talented educators and leadership professionals with premier educational institutions.</p>
+                            <p style=""margin:8px 0 0 0;"">Support: <a href=""mailto:support@edukey360.com"" style=""color:#0f766e;text-decoration:none;"">support@edukey360.com</a> &bull; <a href=""https://edukey360.com"" style=""color:#0f766e;text-decoration:none;"">www.edukey360.com</a></p>
+                            <p style=""margin:8px 0 0 0;font-size:11px;color:#cbd5e1;"">You received this security notification because your account credentials were modified.</p>
                         </td>
                     </tr>
                 </table>

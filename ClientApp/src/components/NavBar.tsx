@@ -251,7 +251,7 @@ export default function NavBar() {
                   </MenuItem>
                 )}
 
-                {isAdmin && (
+                {(isAdmin || isSuperAdmin) && (
                   <MenuItem onClick={() => { handleMenuClose(); navigate('/admin/profile'); }}>
                     <ListItemIcon sx={{ minWidth: 32 }}>
                       <PersonIcon fontSize="small" />
