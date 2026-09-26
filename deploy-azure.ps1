@@ -7,7 +7,7 @@ param (
     [string]$ResourceGroupName = "rg-mynaukri-centralindia",
     [string]$Location = "centralindia",
     [string]$VmName = "vm-mynaukri",
-    [string]$VmSize = "Standard_B1s",
+    [string]$VmSize = "Standard_B2ats_v2",
     [string]$DnsName = "mynaukri-edukey-$((Get-Random -Minimum 1000 -Maximum 9999))",
     [string]$AdminUsername = "azureuser"
 )
@@ -16,7 +16,7 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host " MyNaukri Deployment to Azure ($Location) " -ForegroundColor Cyan
-Write-Host " Target VM Size: $VmSize (1 vCPU, 1 GB RAM)" -ForegroundColor Cyan
+Write-Host " Target VM Size: $VmSize (1 vCPU, 1 GB/2 GB RAM, B-series v2)" -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
 
 # 1. Verify Azure CLI Login
@@ -99,6 +99,10 @@ az vm create `
     --os-disk-size-gb 30 `
     --storage-sku StandardSSD_LRS `
     --output none
+
+if ($LASTEXITCODE -ne 0) {
+    throw "az vm create failed with exit code $LASTEXITCODE."
+}
 
 Write-Host "VM '$VmName' provisioned successfully." -ForegroundColor Green
 

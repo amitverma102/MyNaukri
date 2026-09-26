@@ -37,16 +37,19 @@ services:
       - JwtOptions__Issuer=MyNaukriAPI
       - JwtOptions__Audience=MyNaukriClient
       - JwtOptions__SecretKey=${JWT_SECRET_KEY:-SuperSecretKeyThatIsAtLeast32CharactersLong!}
-      - Razorpay__KeyId=${RAZORPAY_KEY_ID:-rzp_test_TUGuW4IIPFoqjo}
-      - Razorpay__KeySecret=${RAZORPAY_KEY_SECRET:-dT34GIRIg7v2AXDPzsaXxv0X}
+      - Razorpay__KeyId=${RAZORPAY_KEY_ID}
+      - Razorpay__KeySecret=${RAZORPAY_KEY_SECRET}
       - EmailSettings__SmtpServer=smtpout.secureserver.net
       - EmailSettings__Port=465
       - EmailSettings__SenderName=EduKey360 Jobs
       - EmailSettings__SenderEmail=jobs@edukey360.com
-      - EmailSettings__Password=${EMAIL_PASSWORD:-__SET_VIA_ENV__}
+      - EmailSettings__Password=${EMAIL_PASSWORD}
       - EmailSettings__VerificationSenderName=EduKey360 Verification
       - EmailSettings__VerificationSenderEmail=verification@edukey360.com
-      - EmailSettings__VerificationPassword=${VERIFICATION_EMAIL_PASSWORD:-__SET_VIA_ENV__}
+      - EmailSettings__VerificationPassword=${VERIFICATION_EMAIL_PASSWORD}
+      - AzureBlobStorage__ConnectionString=${AZURE_STORAGE_CONNECTION_STRING}
+      - AzureBlobStorage__ContainerName=${AZURE_STORAGE_CONTAINER_NAME:-resumes}
+      - Gemini__ApiKey=${GEMINI_API_KEY}
     ports:
       - "8080:8080"
     depends_on:
