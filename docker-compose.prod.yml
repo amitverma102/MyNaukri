@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: mynaukri-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres123}
+      POSTGRES_DB: ${POSTGRES_DB:-mynaukri_db}
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=32MB
+      -c effective_cache_size=256MB
+      -c max_connections=50
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    container_name: mynaukri-backend
+    restart: always
+    build:
+      context: .
+      dockerfile: MyNaukri.API/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Host=db;Database=${POSTGRES_DB:-mynaukri_db};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres123}
+      - JwtOptions__Issuer=MyNaukriAPI
+      - JwtOptions__Audience=MyNaukriClient
+      - JwtOptions__SecretKey=${JWT_SECRET_KEY:-SuperSecretKeyThatIsAtLeast32CharactersLong!}
+      - Razorpay__KeyId=${RAZORPAY_KEY_ID:-rzp_test_TUGuW4IIPFoqjo}
+      - Razorpay__KeySecret=${RAZORPAY_KEY_SECRET:-dT34GIRIg7v2AXDPzsaXxv0X}
+      - EmailSettings__SmtpServer=smtpout.secureserver.net
+      - EmailSettings__Port=465
+      - EmailSettings__SenderName=EduKey360 Jobs
+      - EmailSettings__SenderEmail=jobs@edukey360.com
+      - EmailSettings__Password=${EMAIL_PASSWORD:-__SET_VIA_ENV__}
+      - EmailSettings__VerificationSenderName=EduKey360 Verification
+      - EmailSettings__VerificationSenderEmail=verification@edukey360.com
+      - EmailSettings__VerificationPassword=${VERIFICATION_EMAIL_PASSWORD:-__SET_VIA_ENV__}
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    container_name: mynaukri-frontend
+    restart: always
+    build:
+      context: ./ClientApp
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

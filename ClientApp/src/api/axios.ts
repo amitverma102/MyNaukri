@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://mynaukri-backend.greendune-87ffa7a1.centralus.azurecontainerapps.io';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
