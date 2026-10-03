@@ -50,6 +50,13 @@ services:
       - AzureBlobStorage__ConnectionString=${AZURE_STORAGE_CONNECTION_STRING}
       - AzureBlobStorage__ContainerName=${AZURE_STORAGE_CONTAINER_NAME:-resumes}
       - Gemini__ApiKey=${GEMINI_API_KEY}
+      - Meta__WhatsApp__AccessToken=${WHATSAPP_ACCESS_TOKEN:-}
+      - Meta__WhatsApp__PhoneNumberId=${WHATSAPP_PHONE_NUMBER_ID:-}
+      - Meta__WhatsApp__VerifyToken=${WHATSAPP_VERIFY_TOKEN:-edukey_whatsapp_secret_2026}
+      - Meta__WhatsApp__BusinessAccountId=${WHATSAPP_BUSINESS_ACCOUNT_ID:-}
+      - Meta__WhatsApp__SenderPhoneNumber=${WHATSAPP_SENDER_PHONE_NUMBER:-}
+      - Meta__WhatsApp__BaseUrl=${APP_URL:-https://edukey360.com}
+      - Meta__WhatsApp__EnableSimulationMode=${WHATSAPP_ENABLE_SIMULATION:-false}
     ports:
       - "8080:8080"
     depends_on:

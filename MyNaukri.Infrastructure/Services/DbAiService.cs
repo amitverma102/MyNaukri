@@ -82,7 +82,7 @@ Resume Text:
 
         var modelsToTry = new List<string>();
         if (!string.IsNullOrWhiteSpace(configuredModel)) modelsToTry.Add(configuredModel);
-        modelsToTry.AddRange(new[] { "gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-3.5-flash" });
+        modelsToTry.AddRange(new[] { "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.5-flash-lite" });
         modelsToTry = modelsToTry.Distinct().ToList();
 
         var requestBody = new
