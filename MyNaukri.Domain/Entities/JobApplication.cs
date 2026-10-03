@@ -25,5 +25,8 @@ public class JobApplication : BaseEntity
     public string? CoverLetter { get; set; }
     public string? ResumeUrl { get; set; }
     
+    public bool IsInterviewReminderSent { get; set; } = false;
+    public DateTime? InterviewReminderSentAt { get; set; }
+    
     public ICollection<JobApplicationComment> Comments { get; set; } = new List<JobApplicationComment>();
 }

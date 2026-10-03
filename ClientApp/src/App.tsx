@@ -15,6 +15,7 @@ import './App.css';
 // Lazy-loaded route components for optimal production bundle splitting
 const InstitutionShowcase = lazy(() => import('./components/InstitutionShowcase'));
 const JobsList = lazy(() => import('./components/JobsList'));
+const JobDetailsPage = lazy(() => import('./components/JobDetailsPage'));
 const CandidateDashboard = lazy(() => import('./components/CandidateDashboard'));
 const CandidateProfile = lazy(() => import('./components/CandidateProfile'));
 const SavedJobs = lazy(() => import('./components/candidate/SavedJobs'));
@@ -27,6 +28,7 @@ const AdminProfile = lazy(() => import('./components/AdminProfile'));
 const EduTechDashboard = lazy(() => import('./components/EduTechDashboard'));
 const InstituteAdminDashboard = lazy(() => import('./components/InstituteAdminDashboard'));
 const RecruiterManagement = lazy(() => import('./components/instituteadmin/RecruiterManagement'));
+const PendingApprovals = lazy(() => import('./components/instituteadmin/PendingApprovals'));
 const SuperAdminDashboard = lazy(() => import('./components/superadmin/SuperAdminDashboard'));
 const InstitutionList = lazy(() => import('./components/superadmin/InstitutionList'));
 const CreditTransactionTable = lazy(() => import('./components/superadmin/CreditTransactionTable'));
@@ -80,6 +82,7 @@ function App() {
           <Route path="/edutechadmin/dashboard" element={<EduTechDashboard />} />
           <Route path="/instituteadmin/dashboard" element={<InstituteAdminDashboard />} />
           <Route path="/instituteadmin/recruiters" element={<RecruiterManagement />} />
+          <Route path="/instituteadmin/approvals" element={<PendingApprovals />} />
           
           {/* SuperAdmin Routes */}
           <Route path="/superadmin/dashboard" element={<SuperAdminDashboard />} />
@@ -88,6 +91,7 @@ function App() {
           
           {/* Legacy/Common Routes */}
           <Route path="/jobs" element={<JobsList />} />
+          <Route path="/jobs/:id" element={<JobDetailsPage />} />
           <Route path="/institution/:id" element={<InstitutionShowcase />} />
           
           {/* Info Pages */}

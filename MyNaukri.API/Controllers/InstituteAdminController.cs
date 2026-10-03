@@ -7,6 +7,8 @@ using MyNaukri.Domain.Enums;
 using MyNaukri.Infrastructure.Data;
 using MyNaukri.Infrastructure.Services;
 using MyNaukri.Application.DTOs.SuperAdmin;
+using MyNaukri.Application.DTOs.InstituteAdmin;
+using MyNaukri.Application.DTOs.Jobs;
 using System.Security.Claims;
 
 namespace MyNaukri.API.Controllers;
@@ -21,19 +23,22 @@ public class InstituteAdminController : ControllerBase
     private readonly ICreditLedgerService _creditLedgerService;
     private readonly IRazorpayService _razorpayService;
     private readonly IStorageService _storageService;
+    private readonly ICreditService? _creditService;
 
     public InstituteAdminController(
         ApplicationDbContext context, 
         IInstitutionCreditService institutionCreditService, 
         ICreditLedgerService creditLedgerService, 
         IRazorpayService razorpayService,
-        IStorageService storageService)
+        IStorageService storageService,
+        ICreditService? creditService = null)
     {
         _context = context;
         _institutionCreditService = institutionCreditService;
         _creditLedgerService = creditLedgerService;
         _razorpayService = razorpayService;
         _storageService = storageService;
+        _creditService = creditService;
     }
 
     private async Task<Guid?> GetInstitutionIdAsync(Guid userId)
@@ -537,7 +542,9 @@ public class InstituteAdminController : ControllerBase
                 r.Department,
                 r.Credits,
                 r.User.IsActive,
-                r.CreatedAt
+                r.CreatedAt,
+                ActiveJobsCount = _context.Jobs.Count(j => j.RecruiterId == r.Id && j.IsActive),
+                TotalJobsCount = _context.Jobs.Count(j => j.RecruiterId == r.Id)
             })
             .ToListAsync();
             
@@ -822,7 +829,7 @@ public class InstituteAdminController : ControllerBase
     }
 
     [HttpDelete("recruiters/{id}")]
-    public async Task<IActionResult> DeactivateRecruiter(Guid id)
+    public async Task<IActionResult> DeactivateRecruiter(Guid id, [FromQuery] Guid? reassignToRecruiterId = null)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
@@ -838,6 +845,30 @@ public class InstituteAdminController : ControllerBase
 
         if (!recruiter.User.IsActive) return BadRequest("Recruiter is already inactive.");
 
+        int reassignedCount = 0;
+        string reassignedMessage = "";
+        if (reassignToRecruiterId.HasValue && reassignToRecruiterId.Value != Guid.Empty)
+        {
+            var targetRecruiter = await _context.Recruiters
+                .Include(r => r.User)
+                .FirstOrDefaultAsync(r => r.Id == reassignToRecruiterId.Value && r.InstitutionId == institutionId.Value);
+
+            if (targetRecruiter == null) return BadRequest("Target recruiter for job reassignment not found in this institution.");
+            if (!targetRecruiter.User.IsActive) return BadRequest("Cannot reassign jobs to an inactive recruiter.");
+            if (targetRecruiter.Id == recruiter.Id) return BadRequest("Cannot reassign jobs to the recruiter being deactivated.");
+
+            var jobs = await _context.Jobs
+                .Where(j => j.RecruiterId == id && j.InstitutionId == institutionId.Value)
+                .ToListAsync();
+
+            foreach (var job in jobs)
+            {
+                job.RecruiterId = targetRecruiter.Id;
+            }
+            reassignedCount = jobs.Count;
+            reassignedMessage = $" {reassignedCount} job(s) reassigned to {targetRecruiter.User.FirstName} {targetRecruiter.User.LastName}.";
+        }
+
         recruiter.User.IsActive = false;
 
         _context.AuditLogs.Add(new AuditLog {
@@ -845,11 +876,56 @@ public class InstituteAdminController : ControllerBase
             PerformedByUserId = userId,
             Role = Role.InstituteAdministrator,
             InstitutionId = institutionId.Value,
-            Details = $"Deactivated recruiter {recruiter.User.Email}"
+            Details = $"Deactivated recruiter {recruiter.User.Email}.{reassignedMessage}"
         });
 
         await _context.SaveChangesAsync();
-        return Ok(new { message = "Recruiter deactivated successfully." });
+        return Ok(new { message = $"Recruiter deactivated successfully.{reassignedMessage}", reassignedCount });
+    }
+
+    [HttpPost("recruiters/{id}/reassign-jobs")]
+    public async Task<IActionResult> BulkReassignRecruiterJobs(Guid id, [FromBody] ReassignJobDto dto)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+
+        var institutionId = await GetInstitutionIdAsync(userId);
+        if (institutionId == null) return Forbid();
+
+        var sourceRecruiter = await _context.Recruiters
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r => r.Id == id && r.InstitutionId == institutionId.Value);
+
+        if (sourceRecruiter == null) return NotFound("Source recruiter not found.");
+
+        var targetRecruiter = await _context.Recruiters
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r => r.Id == dto.TargetRecruiterId && r.InstitutionId == institutionId.Value);
+
+        if (targetRecruiter == null) return BadRequest("Target recruiter not found or does not belong to this institution.");
+        if (!targetRecruiter.User.IsActive) return BadRequest("Cannot reassign jobs to an inactive recruiter.");
+        if (sourceRecruiter.Id == targetRecruiter.Id) return BadRequest("Source and target recruiter cannot be the same.");
+
+        var jobs = await _context.Jobs
+            .Where(j => j.RecruiterId == id && j.InstitutionId == institutionId.Value)
+            .ToListAsync();
+
+        foreach (var job in jobs)
+        {
+            job.RecruiterId = targetRecruiter.Id;
+        }
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            Action = "BULK_REASSIGN_JOBS",
+            PerformedByUserId = userId,
+            Role = Role.InstituteAdministrator,
+            InstitutionId = institutionId.Value,
+            Details = $"Transferred {jobs.Count} jobs from {sourceRecruiter.User.FirstName} {sourceRecruiter.User.LastName} to {targetRecruiter.User.FirstName} {targetRecruiter.User.LastName}"
+        });
+
+        await _context.SaveChangesAsync();
+        return Ok(new { message = $"Transferred {jobs.Count} jobs to {targetRecruiter.User.FirstName} {targetRecruiter.User.LastName}.", reassignedCount = jobs.Count });
     }
 
     [HttpPost("recruiters/{id}/reactivate")]
@@ -1001,6 +1077,403 @@ public class InstituteAdminController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { LogoUrl = logoUrl, message = "Logo uploaded successfully." });
+    }
+
+    [HttpGet("approval-settings")]
+    public async Task<IActionResult> GetApprovalSettings()
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+
+        var institutionId = await GetInstitutionIdAsync(userId);
+        if (institutionId == null) return Forbid("User is not associated with any institution.");
+
+        var institution = await _context.Institutions.FindAsync(institutionId.Value);
+        if (institution == null) return NotFound("Institution not found.");
+
+        return Ok(new ApprovalSettingsDto
+        {
+            RequireJobApproval = institution.RequireJobApproval
+        });
+    }
+
+    [HttpPut("approval-settings")]
+    public async Task<IActionResult> UpdateApprovalSettings([FromBody] ApprovalSettingsDto dto)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+
+        var institutionId = await GetInstitutionIdAsync(userId);
+        if (institutionId == null) return Forbid("User is not associated with any institution.");
+
+        var institution = await _context.Institutions.FindAsync(institutionId.Value);
+        if (institution == null) return NotFound("Institution not found.");
+
+        institution.RequireJobApproval = dto.RequireJobApproval;
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            Action = "UPDATE_APPROVAL_SETTINGS",
+            PerformedByUserId = userId,
+            Role = Role.InstituteAdministrator,
+            InstitutionId = institutionId.Value,
+            Details = $"Updated RequireJobApproval to {dto.RequireJobApproval}"
+        });
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Approval settings updated successfully.",
+            requireJobApproval = institution.RequireJobApproval
+        });
+    }
+
+    [HttpGet("approvals/jobs")]
+    public async Task<IActionResult> GetJobsForApproval(
+        [FromQuery] string? status,
+        [FromQuery] string? search)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+
+        var institutionId = await GetInstitutionIdAsync(userId);
+        if (institutionId == null) return Forbid("User is not associated with any institution.");
+
+        var allJobsQuery = _context.Jobs
+            .Include(j => j.Recruiter)
+                .ThenInclude(r => r.User)
+            .Include(j => j.Institution)
+            .Include(j => j.ApprovedByUser)
+            .Include(j => j.AssignedRecruiters)
+                .ThenInclude(ar => ar.Recruiter)
+                .ThenInclude(r => r.User)
+            .Where(j => j.InstitutionId == institutionId.Value);
+
+        var pendingCount = await allJobsQuery.CountAsync(j => j.ApprovalStatus == JobApprovalStatus.Pending);
+        var approvedCount = await allJobsQuery.CountAsync(j => j.ApprovalStatus == JobApprovalStatus.Approved);
+        var rejectedCount = await allJobsQuery.CountAsync(j => j.ApprovalStatus == JobApprovalStatus.Rejected);
+        var totalCount = await allJobsQuery.CountAsync();
+
+        var query = allJobsQuery.AsQueryable();
+
+        var statusClean = status?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrEmpty(statusClean) && statusClean != "all")
+        {
+            if (statusClean == "pending")
+                query = query.Where(j => j.ApprovalStatus == JobApprovalStatus.Pending);
+            else if (statusClean == "approved")
+                query = query.Where(j => j.ApprovalStatus == JobApprovalStatus.Approved);
+            else if (statusClean == "rejected")
+                query = query.Where(j => j.ApprovalStatus == JobApprovalStatus.Rejected);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchLower = search.Trim().ToLowerInvariant();
+            query = query.Where(j =>
+                j.Title.ToLower().Contains(searchLower) ||
+                (j.Recruiter != null && (
+                    j.Recruiter.User.FirstName.ToLower().Contains(searchLower) ||
+                    j.Recruiter.User.LastName.ToLower().Contains(searchLower) ||
+                    j.Recruiter.User.Email.ToLower().Contains(searchLower) ||
+                    (j.Recruiter.Department != null && j.Recruiter.Department.ToLower().Contains(searchLower))
+                )) ||
+                (j.SubjectDepartment != null && j.SubjectDepartment.ToLower().Contains(searchLower)) ||
+                (j.Location != null && j.Location.ToLower().Contains(searchLower))
+            );
+        }
+
+        var jobs = await query
+            .OrderByDescending(j => j.ApprovalStatus == JobApprovalStatus.Pending)
+            .ThenByDescending(j => j.CreatedAt)
+            .Select(j => new JobDto
+            {
+                Id = j.Id,
+                Title = j.Title,
+                Description = j.Description,
+                Requirements = j.Requirements,
+                MinSalary = j.MinSalary,
+                MaxSalary = j.MaxSalary,
+                JobType = j.JobType,
+                Location = j.Location,
+                RecruiterId = j.RecruiterId,
+                InstitutionId = j.InstitutionId,
+                CreatedAt = j.CreatedAt,
+                IsActive = j.IsActive,
+                CompanyName = j.Institution != null ? j.Institution.Name : "",
+                Keywords = j.Keywords,
+                IsPlatinum = j.IsPlatinum,
+                WorkMode = j.WorkMode,
+                BoardAffiliation = j.BoardAffiliation,
+                SubjectDepartment = j.SubjectDepartment,
+                ScreeningQuestionsJson = j.ScreeningQuestionsJson,
+                InstitutionLogoUrl = j.Institution != null ? j.Institution.LogoUrl : null,
+                ApprovalStatus = j.ApprovalStatus.ToString(),
+                ApprovalComment = j.ApprovalComment,
+                ApprovedAt = j.ApprovedAt,
+                RecruiterName = j.Recruiter != null ? $"{j.Recruiter.User.FirstName} {j.Recruiter.User.LastName}".Trim() : null,
+                RecruiterEmail = j.Recruiter != null ? j.Recruiter.User.Email : null,
+                RecruiterDesignation = j.Recruiter != null ? j.Recruiter.Designation : null,
+                IsRestrictedAccess = j.IsRestrictedAccess,
+                AssignedRecruiterIds = j.AssignedRecruiters.Select(ar => ar.RecruiterId).ToList(),
+                AssignedRecruiterNames = j.AssignedRecruiters.Select(ar => $"{ar.Recruiter.User.FirstName} {ar.Recruiter.User.LastName}".Trim()).ToList(),
+                IsOwner = false,
+                CanManage = true
+            })
+            .ToListAsync();
+
+        return Ok(new InstitutionJobApprovalsResponseDto
+        {
+            PendingCount = pendingCount,
+            ApprovedCount = approvedCount,
+            RejectedCount = rejectedCount,
+            TotalCount = totalCount,
+            Jobs = jobs
+        });
+    }
+
+    [HttpPost("approvals/jobs/{jobId}/approve")]
+    public async Task<IActionResult> ApproveJob(Guid jobId, [FromBody] JobApprovalDecisionDto? dto)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+
+        var institutionId = await GetInstitutionIdAsync(userId);
+        if (institutionId == null) return Forbid("User is not associated with any institution.");
+
+        var job = await _context.Jobs
+            .Include(j => j.Recruiter)
+                .ThenInclude(r => r.User)
+            .FirstOrDefaultAsync(j => j.Id == jobId && j.InstitutionId == institutionId.Value);
+
+        if (job == null) return NotFound("Job not found.");
+
+        if (job.ApprovalStatus == JobApprovalStatus.Approved)
+        {
+            return BadRequest("Job is already approved.");
+        }
+
+        job.ApprovalStatus = JobApprovalStatus.Approved;
+        job.IsActive = true;
+        job.ApprovedAt = DateTime.UtcNow;
+        job.ApprovedByUserId = userId;
+        job.ApprovalComment = dto?.Comment?.Trim();
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            Action = "APPROVE_JOB",
+            PerformedByUserId = userId,
+            Role = Role.InstituteAdministrator,
+            InstitutionId = institutionId.Value,
+            Details = $"Approved job '{job.Title}' (ID: {job.Id})" + 
+                (!string.IsNullOrWhiteSpace(job.ApprovalComment) ? $" with comment: {job.ApprovalComment}" : "")
+        });
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Job approved and activated successfully.",
+            jobId = job.Id,
+            status = job.ApprovalStatus.ToString()
+        });
+    }
+
+    [HttpPost("approvals/jobs/{jobId}/reject")]
+    public async Task<IActionResult> RejectJob(Guid jobId, [FromBody] JobApprovalDecisionDto? dto)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+
+        var institutionId = await GetInstitutionIdAsync(userId);
+        if (institutionId == null) return Forbid("User is not associated with any institution.");
+
+        var job = await _context.Jobs
+            .Include(j => j.Recruiter)
+                .ThenInclude(r => r.User)
+            .FirstOrDefaultAsync(j => j.Id == jobId && j.InstitutionId == institutionId.Value);
+
+        if (job == null) return NotFound("Job not found.");
+
+        if (job.ApprovalStatus == JobApprovalStatus.Rejected)
+        {
+            return BadRequest("Job has already been rejected.");
+        }
+
+        var previousStatus = job.ApprovalStatus;
+        job.ApprovalStatus = JobApprovalStatus.Rejected;
+        job.IsActive = false;
+        job.ApprovedAt = DateTime.UtcNow;
+        job.ApprovedByUserId = userId;
+        job.ApprovalComment = dto?.Comment?.Trim();
+
+        // If the job was pending, refund the posting credits to the recruiter
+        if (_creditService != null && previousStatus == JobApprovalStatus.Pending)
+        {
+            var rates = await _creditService.GetRatesAsync(job.RecruiterId);
+            int refundCredits = job.IsPlatinum ? (rates?.PlatinumJobPostingRate ?? 40) : (rates?.NormalJobPostingRate ?? 20);
+            
+            await _creditService.AddCreditsAsync(
+                job.RecruiterId,
+                refundCredits,
+                TransactionType.CreditRefund,
+                referenceId: job.Id.ToString(),
+                description: $"Credit refund for rejected job: {job.Title}" +
+                    (!string.IsNullOrWhiteSpace(job.ApprovalComment) ? $" (Reason: {job.ApprovalComment})" : ""),
+                currentUserId: userId
+            );
+        }
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            Action = "REJECT_JOB",
+            PerformedByUserId = userId,
+            Role = Role.InstituteAdministrator,
+            InstitutionId = institutionId.Value,
+            Details = $"Rejected job '{job.Title}' (ID: {job.Id})" +
+                (!string.IsNullOrWhiteSpace(job.ApprovalComment) ? $" with comment: {job.ApprovalComment}" : "")
+        });
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Job rejected successfully. Credits have been refunded to the recruiter.",
+            jobId = job.Id,
+            status = job.ApprovalStatus.ToString()
+        });
+    }
+
+    [HttpGet("jobs/{jobId}/access")]
+    public async Task<IActionResult> GetJobAccessConfig(Guid jobId)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+
+        var institutionId = await GetInstitutionIdAsync(userId);
+        if (institutionId == null) return Forbid();
+
+        var job = await _context.Jobs
+            .Include(j => j.Recruiter).ThenInclude(r => r.User)
+            .Include(j => j.AssignedRecruiters).ThenInclude(ar => ar.Recruiter).ThenInclude(r => r.User)
+            .FirstOrDefaultAsync(j => j.Id == jobId && j.InstitutionId == institutionId.Value);
+
+        if (job == null) return NotFound("Job not found.");
+
+        var dto = new JobAccessConfigDto
+        {
+            JobId = job.Id,
+            JobTitle = job.Title,
+            OwnerRecruiterId = job.RecruiterId,
+            OwnerRecruiterName = job.Recruiter != null ? $"{job.Recruiter.User.FirstName} {job.Recruiter.User.LastName}".Trim() : string.Empty,
+            IsRestrictedAccess = job.IsRestrictedAccess,
+            AssignedRecruiterIds = job.AssignedRecruiters.Select(ar => ar.RecruiterId).ToList(),
+            AssignedRecruiters = job.AssignedRecruiters.Select(ar => new AssignedRecruiterInfoDto
+            {
+                RecruiterId = ar.RecruiterId,
+                Name = ar.Recruiter != null ? $"{ar.Recruiter.User.FirstName} {ar.Recruiter.User.LastName}".Trim() : string.Empty,
+                Email = ar.Recruiter?.User?.Email ?? string.Empty,
+                Designation = ar.Recruiter?.Designation ?? string.Empty
+            }).ToList()
+        };
+
+        return Ok(dto);
+    }
+
+    [HttpPut("jobs/{jobId}/access")]
+    public async Task<IActionResult> UpdateJobAccessConfig(Guid jobId, [FromBody] UpdateJobAccessDto dto)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+
+        var institutionId = await GetInstitutionIdAsync(userId);
+        if (institutionId == null) return Forbid();
+
+        var job = await _context.Jobs
+            .Include(j => j.AssignedRecruiters)
+            .FirstOrDefaultAsync(j => j.Id == jobId && j.InstitutionId == institutionId.Value);
+
+        if (job == null) return NotFound("Job not found.");
+
+        job.IsRestrictedAccess = dto.IsRestrictedAccess;
+
+        // Remove existing assignments
+        _context.JobRecruiterAssignments.RemoveRange(job.AssignedRecruiters);
+
+        // If restricted and assigned recruiters provided, validate they belong to institution
+        if (dto.IsRestrictedAccess && dto.AssignedRecruiterIds != null && dto.AssignedRecruiterIds.Any())
+        {
+            var validRecruiterIds = await _context.Recruiters
+                .Where(r => r.InstitutionId == institutionId.Value && dto.AssignedRecruiterIds.Contains(r.Id))
+                .Select(r => r.Id)
+                .ToListAsync();
+
+            foreach (var rId in validRecruiterIds)
+            {
+                // Don't add the owner as an assigned recruiter since owner always has access
+                if (rId != job.RecruiterId)
+                {
+                    _context.JobRecruiterAssignments.Add(new JobRecruiterAssignment
+                    {
+                        JobId = job.Id,
+                        RecruiterId = rId,
+                        AssignedByUserId = userId,
+                        AssignedAt = DateTime.UtcNow
+                    });
+                }
+            }
+        }
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            Action = "UPDATE_JOB_ACCESS",
+            PerformedByUserId = userId,
+            Role = Role.InstituteAdministrator,
+            InstitutionId = institutionId.Value,
+            Details = $"Updated access for job '{job.Title}' (Restricted: {job.IsRestrictedAccess}, Assigned Count: {dto.AssignedRecruiterIds?.Count ?? 0})"
+        });
+
+        await _context.SaveChangesAsync();
+        return Ok(new { message = "Job access updated successfully." });
+    }
+
+    [HttpPost("jobs/{jobId}/reassign")]
+    public async Task<IActionResult> ReassignJob(Guid jobId, [FromBody] ReassignJobDto dto)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+
+        var institutionId = await GetInstitutionIdAsync(userId);
+        if (institutionId == null) return Forbid();
+
+        var job = await _context.Jobs
+            .Include(j => j.Recruiter).ThenInclude(r => r.User)
+            .FirstOrDefaultAsync(j => j.Id == jobId && j.InstitutionId == institutionId.Value);
+
+        if (job == null) return NotFound("Job not found.");
+
+        var targetRecruiter = await _context.Recruiters
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r => r.Id == dto.TargetRecruiterId && r.InstitutionId == institutionId.Value);
+
+        if (targetRecruiter == null) return BadRequest("Target recruiter not found or does not belong to this institution.");
+        if (!targetRecruiter.User.IsActive) return BadRequest("Cannot reassign job to an inactive recruiter.");
+
+        var previousOwner = job.Recruiter != null ? $"{job.Recruiter.User.FirstName} {job.Recruiter.User.LastName}".Trim() : job.RecruiterId.ToString();
+        job.RecruiterId = targetRecruiter.Id;
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            Action = "REASSIGN_JOB",
+            PerformedByUserId = userId,
+            Role = Role.InstituteAdministrator,
+            InstitutionId = institutionId.Value,
+            Details = $"Reassigned job '{job.Title}' from {previousOwner} to {targetRecruiter.User.FirstName} {targetRecruiter.User.LastName}"
+        });
+
+        await _context.SaveChangesAsync();
+        return Ok(new { message = $"Job successfully reassigned to {targetRecruiter.User.FirstName} {targetRecruiter.User.LastName}." });
     }
 }
 

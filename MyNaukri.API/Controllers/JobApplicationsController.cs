@@ -22,6 +22,7 @@ public class JobApplicationsController : ControllerBase
     private readonly INotificationService _notificationService;
     private readonly IAiService _aiService;
     private readonly IStorageService _storageService;
+    private readonly IWhatsAppNotificationService? _whatsAppService;
 
     public JobApplicationsController(
         ApplicationDbContext context,
@@ -29,7 +30,8 @@ public class JobApplicationsController : ControllerBase
         IPushNotificationService pushService,
         INotificationService notificationService,
         IAiService aiService,
-        IStorageService storageService)
+        IStorageService storageService,
+        IWhatsAppNotificationService? whatsAppService = null)
     {
         _context = context;
         _calendarService = calendarService;
@@ -37,6 +39,7 @@ public class JobApplicationsController : ControllerBase
         _notificationService = notificationService;
         _aiService = aiService;
         _storageService = storageService;
+        _whatsAppService = whatsAppService;
     }
 
     public class ApplyJobRequest
@@ -97,6 +100,8 @@ public class JobApplicationsController : ControllerBase
 
         _context.JobApplications.Add(application);
         await _context.SaveChangesAsync();
+
+        await DispatchApplicationCreatedNotificationsAsync(application.Id);
 
         return Ok(new { Message = "Applied successfully." });
     }
@@ -176,6 +181,8 @@ public class JobApplicationsController : ControllerBase
 
         _context.JobApplications.Add(application);
         await _context.SaveChangesAsync();
+
+        await DispatchApplicationCreatedNotificationsAsync(application.Id);
 
         return Ok(new { Message = "Applied successfully.", ResumeUrl = appliedResumeUrl });
     }
@@ -278,10 +285,31 @@ public class JobApplicationsController : ControllerBase
         if (!Guid.TryParse(userIdString, out var userId)) return Unauthorized();
 
         var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.UserId == userId);
-        if (recruiter == null) return StatusCode(403, "User is not registered as a recruiter.");
+        var adminProfile = await _context.InstituteAdminProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+        var institutionId = recruiter?.InstitutionId ?? adminProfile?.InstitutionId;
 
-        var job = await _context.Jobs.FirstOrDefaultAsync(j => j.Id == jobId && j.RecruiterId == recruiter.Id);
+        if (recruiter == null && adminProfile == null && !User.IsInRole("SuperAdministrator"))
+        {
+            return StatusCode(403, "User is not registered as a recruiter or institute admin.");
+        }
+
+        var job = await _context.Jobs
+            .Include(j => j.AssignedRecruiters)
+            .FirstOrDefaultAsync(j => j.Id == jobId && (
+                User.IsInRole("SuperAdministrator") ||
+                (adminProfile != null && (institutionId == null || j.InstitutionId == institutionId.Value)) ||
+                (recruiter != null && (j.RecruiterId == recruiter.Id || (institutionId != null && j.InstitutionId == institutionId.Value)))
+            ));
+
         if (job == null) return NotFound("Job not found or you don't have permission to view its applications.");
+
+        if (recruiter != null && !User.IsInRole("SuperAdministrator") && !User.IsInRole("InstituteAdministrator"))
+        {
+            if (job.IsRestrictedAccess && job.RecruiterId != recruiter.Id && !job.AssignedRecruiters.Any(ar => ar.RecruiterId == recruiter.Id))
+            {
+                return StatusCode(403, "Access to this job is restricted to selected recruiters.");
+            }
+        }
 
         var applications = await _context.JobApplications
             .Include(a => a.Candidate)
@@ -323,13 +351,32 @@ public class JobApplicationsController : ControllerBase
         if (!Guid.TryParse(userIdString, out var userId)) return Unauthorized();
 
         var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.UserId == userId);
-        if (recruiter == null) return StatusCode(403, "User is not registered as a recruiter.");
+        var adminProfile = await _context.InstituteAdminProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+        var institutionId = recruiter?.InstitutionId ?? adminProfile?.InstitutionId;
 
-        var applications = await _context.JobApplications
+        if (recruiter == null && adminProfile == null && !User.IsInRole("SuperAdministrator"))
+        {
+            return StatusCode(403, "User is not registered as a recruiter or institute admin.");
+        }
+
+        var query = _context.JobApplications
             .Include(a => a.Candidate)
             .ThenInclude(c => c.User)
             .Include(a => a.Job)
-            .Where(a => a.Job.RecruiterId == recruiter.Id && a.Status == ApplicationStatus.InterviewScheduled)
+            .ThenInclude(j => j.AssignedRecruiters)
+            .Where(a => a.Status == ApplicationStatus.InterviewScheduled);
+
+        if (recruiter != null && !User.IsInRole("SuperAdministrator") && !User.IsInRole("InstituteAdministrator"))
+        {
+            query = query.Where(a => (a.Job.RecruiterId == recruiter.Id || (institutionId != null && a.Job.InstitutionId == institutionId.Value)) &&
+                (!a.Job.IsRestrictedAccess || a.Job.RecruiterId == recruiter.Id || a.Job.AssignedRecruiters.Any(ar => ar.RecruiterId == recruiter.Id)));
+        }
+        else if (institutionId.HasValue)
+        {
+            query = query.Where(a => a.Job.InstitutionId == institutionId.Value);
+        }
+
+        var applications = await query
             .Select(a => new JobApplicationDto
             {
                 Id = a.Id,
@@ -371,16 +418,36 @@ public class JobApplicationsController : ControllerBase
         if (!Guid.TryParse(userIdString, out var userId)) return Unauthorized();
 
         var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.UserId == userId);
-        if (recruiter == null) return StatusCode(403, "User is not registered as a recruiter.");
+        var adminProfile = await _context.InstituteAdminProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+        var institutionId = recruiter?.InstitutionId ?? adminProfile?.InstitutionId;
+
+        if (recruiter == null && adminProfile == null && !User.IsInRole("SuperAdministrator"))
+        {
+            return StatusCode(403, "User is not registered as a recruiter or institute admin.");
+        }
 
         var application = await _context.JobApplications
             .Include(a => a.Job)
-            .ThenInclude(j => j.Institution)
+                .ThenInclude(j => j.Institution)
+            .Include(a => a.Job)
+                .ThenInclude(j => j.AssignedRecruiters)
             .Include(a => a.Candidate)
-            .ThenInclude(c => c.User)
-            .FirstOrDefaultAsync(a => a.Id == id && a.Job.RecruiterId == recruiter.Id);
+                .ThenInclude(c => c.User)
+            .FirstOrDefaultAsync(a => a.Id == id && (
+                User.IsInRole("SuperAdministrator") ||
+                (adminProfile != null && (institutionId == null || a.Job.InstitutionId == institutionId.Value)) ||
+                (recruiter != null && (a.Job.RecruiterId == recruiter.Id || (institutionId != null && a.Job.InstitutionId == institutionId.Value)))
+            ));
             
         if (application == null) return NotFound("Application not found or no permission.");
+
+        if (recruiter != null && !User.IsInRole("SuperAdministrator") && !User.IsInRole("InstituteAdministrator"))
+        {
+            if (application.Job.IsRestrictedAccess && application.Job.RecruiterId != recruiter.Id && !application.Job.AssignedRecruiters.Any(ar => ar.RecruiterId == recruiter.Id))
+            {
+                return StatusCode(403, "Access to this job is restricted to selected recruiters.");
+            }
+        }
 
         application.Status = request.Status;
         if (!string.IsNullOrWhiteSpace(request.Note))
@@ -425,6 +492,28 @@ public class JobApplicationsController : ControllerBase
             );
         }
 
+        // Dispatch status update WhatsApp reminder to candidate asynchronously
+        if (_whatsAppService != null && !string.IsNullOrWhiteSpace(application.Candidate.PhoneNumber))
+        {
+            var institutionName = application.Job.Institution?.Name ?? "Institution";
+            var candidateName = application.Candidate.User != null
+                ? $"{application.Candidate.User.FirstName} {application.Candidate.User.LastName}".Trim()
+                : "Candidate";
+
+            try
+            {
+                await _whatsAppService.SendApplicationStatusUpdateAsync(
+                    application.Candidate.PhoneNumber,
+                    candidateName,
+                    application.Job.Title,
+                    institutionName,
+                    request.Status.ToString(),
+                    request.Note
+                );
+            }
+            catch { }
+        }
+
         return NoContent();
     }
 
@@ -447,16 +536,36 @@ public class JobApplicationsController : ControllerBase
         if (!Guid.TryParse(userIdString, out var userId)) return Unauthorized();
 
         var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.UserId == userId);
-        if (recruiter == null) return StatusCode(403, "User is not registered as a recruiter.");
+        var adminProfile = await _context.InstituteAdminProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+        var institutionId = recruiter?.InstitutionId ?? adminProfile?.InstitutionId;
+
+        if (recruiter == null && adminProfile == null && !User.IsInRole("SuperAdministrator"))
+        {
+            return StatusCode(403, "User is not registered as a recruiter or institute admin.");
+        }
 
         var application = await _context.JobApplications
             .Include(a => a.Job)
-            .ThenInclude(j => j.Institution)
+                .ThenInclude(j => j.Institution)
+            .Include(a => a.Job)
+                .ThenInclude(j => j.AssignedRecruiters)
             .Include(a => a.Candidate)
-            .ThenInclude(c => c.User)
-            .FirstOrDefaultAsync(a => a.Id == id && a.Job.RecruiterId == recruiter.Id);
+                .ThenInclude(c => c.User)
+            .FirstOrDefaultAsync(a => a.Id == id && (
+                User.IsInRole("SuperAdministrator") ||
+                (adminProfile != null && (institutionId == null || a.Job.InstitutionId == institutionId.Value)) ||
+                (recruiter != null && (a.Job.RecruiterId == recruiter.Id || (institutionId != null && a.Job.InstitutionId == institutionId.Value)))
+            ));
             
         if (application == null) return NotFound("Application not found or no permission.");
+
+        if (recruiter != null && !User.IsInRole("SuperAdministrator") && !User.IsInRole("InstituteAdministrator"))
+        {
+            if (application.Job.IsRestrictedAccess && application.Job.RecruiterId != recruiter.Id && !application.Job.AssignedRecruiters.Any(ar => ar.RecruiterId == recruiter.Id))
+            {
+                return StatusCode(403, "Access to this job is restricted to selected recruiters.");
+            }
+        }
 
         bool isReschedule = application.InterviewDate.HasValue;
         application.Status = ApplicationStatus.InterviewScheduled;
@@ -479,6 +588,10 @@ public class JobApplicationsController : ControllerBase
                 Comment = rescheduleNote
             });
         }
+
+        // Reset interview reminder flags so 30-min reminder triggers for the new time
+        application.IsInterviewReminderSent = false;
+        application.InterviewReminderSentAt = null;
         
         await _context.SaveChangesAsync();
 
@@ -526,7 +639,7 @@ public class JobApplicationsController : ControllerBase
             method: "REQUEST"
         );
 
-        byte[] icsBytes = Encoding.UTF8.GetBytes(icsContent);
+        byte[]? icsBytes = !string.IsNullOrWhiteSpace(icsContent) ? Encoding.UTF8.GetBytes(icsContent) : null;
 
         if (!string.IsNullOrWhiteSpace(application.Candidate.User?.Email))
         {
@@ -549,10 +662,52 @@ public class JobApplicationsController : ControllerBase
                 body: emailHtml,
                 isHtml: true,
                 attachmentBytes: icsBytes,
-                attachmentFilename: $"interview_{application.Id.ToString().Substring(0, 8)}.ics",
-                attachmentContentType: "text/calendar",
+                attachmentFilename: icsBytes != null ? $"interview_{application.Id.ToString().Substring(0, 8)}.ics" : null,
+                attachmentContentType: icsBytes != null ? "text/calendar" : null,
                 emailType: EmailType.Default
             );
+        }
+
+        // Dispatch WhatsApp interview notification to candidate and recruiter
+        if (_whatsAppService != null)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(application.Candidate.PhoneNumber))
+                {
+                    await _whatsAppService.SendInterviewScheduledCandidateAsync(
+                        application.Candidate.PhoneNumber,
+                        candidateName,
+                        application.Job.Title,
+                        institutionName,
+                        request.InterviewDate,
+                        request.InterviewMode.ToString(),
+                        locationOrLink,
+                        isReschedule,
+                        request.RescheduleReason
+                    );
+                }
+
+                var recruiterMobile = recruiter?.Mobile;
+                if (!string.IsNullOrWhiteSpace(recruiterMobile))
+                {
+                    var recruiterName = recruiter?.User != null
+                        ? $"{recruiter.User.FirstName} {recruiter.User.LastName}".Trim()
+                        : "Recruiter";
+
+                    await _whatsAppService.SendInterviewScheduledRecruiterAsync(
+                        recruiterMobile,
+                        recruiterName,
+                        candidateName,
+                        application.Job.Title,
+                        request.InterviewDate,
+                        request.InterviewMode.ToString(),
+                        locationOrLink,
+                        isReschedule
+                    );
+                }
+            }
+            catch { }
         }
 
         return NoContent();
@@ -893,6 +1048,63 @@ public class JobApplicationsController : ControllerBase
             {
                 return DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc).AddMinutes(330);
             }
+        }
+    }
+
+    private async Task DispatchApplicationCreatedNotificationsAsync(Guid applicationId)
+    {
+        if (_whatsAppService == null) return;
+
+        try
+        {
+            var app = await _context.JobApplications
+                .Include(a => a.Job)
+                    .ThenInclude(j => j.Institution)
+                .Include(a => a.Job)
+                    .ThenInclude(j => j.Recruiter)
+                        .ThenInclude(r => r.User)
+                .Include(a => a.Candidate)
+                    .ThenInclude(c => c.User)
+                .FirstOrDefaultAsync(a => a.Id == applicationId);
+
+            if (app == null) return;
+
+            var candidateName = app.Candidate.User != null 
+                ? $"{app.Candidate.User.FirstName} {app.Candidate.User.LastName}".Trim() 
+                : "Candidate";
+            var institutionName = app.Job.Institution?.Name ?? "Institution";
+
+            // 1. WhatsApp confirmation to candidate
+            if (!string.IsNullOrWhiteSpace(app.Candidate.PhoneNumber))
+            {
+                await _whatsAppService.SendJobApplicationSubmittedAsync(
+                    app.Candidate.PhoneNumber,
+                    candidateName,
+                    app.Job.Title,
+                    institutionName,
+                    app.Id);
+            }
+
+            // 2. WhatsApp alert to recruiter
+            var recruiter = app.Job.Recruiter;
+            if (recruiter != null && !string.IsNullOrWhiteSpace(recruiter.Mobile))
+            {
+                var recruiterName = recruiter.User != null 
+                    ? $"{recruiter.User.FirstName} {recruiter.User.LastName}".Trim() 
+                    : "Recruiter";
+
+                await _whatsAppService.SendNewApplicationRecruiterAlertAsync(
+                    recruiter.Mobile,
+                    recruiterName,
+                    candidateName,
+                    app.Job.Title,
+                    institutionName,
+                    app.Id);
+            }
+        }
+        catch
+        {
+            // Fail-safe: notification failures must never impact job application submission
         }
     }
 }

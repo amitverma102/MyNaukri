@@ -38,6 +38,8 @@ builder.Services.AddScoped<ICreditLedgerService, CreditLedgerService>();
 builder.Services.AddScoped<IRazorpayService, MyNaukri.Infrastructure.Services.Payment.RazorpayService>();
 builder.Services.AddScoped<ICalendarInviteService, CalendarInviteService>();
 builder.Services.AddScoped<IPushNotificationService, ExpoPushNotificationService>();
+builder.Services.AddHttpClient<IWhatsAppNotificationService, MyNaukri.Infrastructure.Services.WhatsApp.WhatsAppNotificationService>();
+builder.Services.Configure<MyNaukri.Infrastructure.Services.WhatsApp.WhatsAppSettings>(builder.Configuration.GetSection("Meta:WhatsApp"));
 builder.Services.AddSingleton<IVideoVerificationQueue, VideoVerificationQueue>();
 builder.Services.AddScoped<IVideoVerificationService, GeminiVideoVerificationService>();
 builder.Services.AddHostedService<VideoVerificationBackgroundService>();
@@ -47,6 +49,7 @@ builder.Services.Configure<AzureBlobStorageSettings>(builder.Configuration.GetSe
 builder.Services.AddHostedService<ExpireCreditsJob>();
 builder.Services.AddHostedService<DailyJobMatchEmailBackgroundService>();
 builder.Services.AddHostedService<DailyCreditActivityReportBackgroundService>();
+builder.Services.AddHostedService<InterviewReminderBackgroundService>();
 
 // Configure Health Checks for Liveness and Readiness Probes
 builder.Services.AddHealthChecks()

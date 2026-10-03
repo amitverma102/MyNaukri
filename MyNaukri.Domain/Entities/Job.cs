@@ -29,5 +29,16 @@ public class Job : BaseEntity
     public string? BoardAffiliation { get; set; }
     public string? SubjectDepartment { get; set; }
     
+    // Approval flow
+    public JobApprovalStatus ApprovalStatus { get; set; } = JobApprovalStatus.Approved;
+    public string? ApprovalComment { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public Guid? ApprovedByUserId { get; set; }
+    public User? ApprovedByUser { get; set; }
+    
     public ICollection<JobApplication> Applications { get; set; } = new List<JobApplication>();
+    
+    // Access control: By default false (available to all recruiters in institute). Admin can restrict.
+    public bool IsRestrictedAccess { get; set; } = false;
+    public ICollection<JobRecruiterAssignment> AssignedRecruiters { get; set; } = new List<JobRecruiterAssignment>();
 }

@@ -378,19 +378,40 @@ public class CandidatesController : ControllerBase
         var candidate = await _context.Candidates.Include(c => c.User).FirstOrDefaultAsync(c => c.Id == id);
         if (candidate == null) return NotFound("Candidate not found.");
 
+        var access = await _context.CandidateContactAccesses.FirstOrDefaultAsync(a => a.RecruiterId == recruiter.Id && a.CandidateId == id);
+        if (access != null && access.HasDownloadedResume)
+        {
+            var currentBalance = await _creditService.GetBalanceAsync(recruiter.Id);
+            return Ok(new { ResumeUrl = candidate.ResumeUrl, CreditsDeducted = 0, RemainingBalance = currentBalance });
+        }
+
+        // Check if any recruiter in this institution has already unlocked/downloaded the resume
+        var existingInstitutionResumeAccess = await _context.CandidateContactAccesses
+            .Include(a => a.Recruiter)
+            .FirstOrDefaultAsync(a => 
+                (a.InstitutionId == recruiter.InstitutionId || (a.Recruiter != null && a.Recruiter.InstitutionId == recruiter.InstitutionId)) &&
+                a.CandidateId == id && 
+                a.HasDownloadedResume);
+
+        if (existingInstitutionResumeAccess != null)
+        {
+            var currentBalance = await _creditService.GetBalanceAsync(recruiter.Id);
+            return Ok(new { 
+                ResumeUrl = candidate.ResumeUrl, 
+                CreditsDeducted = 0, 
+                RemainingBalance = currentBalance,
+                AlreadyUnlockedByInstitution = true,
+                Message = "Resume already unlocked by your institution." 
+            });
+        }
+
         var rates = await _creditService.GetRatesAsync(recruiter.Id);
-        int requiredCredits = rates.ResumeDownloadRate ?? 5;
+        int requiredCredits = rates?.ResumeDownloadRate ?? 5;
         var balance = await _creditService.GetBalanceAsync(recruiter.Id);
 
         if (balance < requiredCredits)
         {
             return StatusCode(402, new { code = "INSUFFICIENT_CREDITS", message = "Insufficient credits.", requiredCredits, availableCredits = balance, shortfall = requiredCredits - balance });
-        }
-
-        var access = await _context.CandidateContactAccesses.FirstOrDefaultAsync(a => a.RecruiterId == recruiter.Id && a.CandidateId == id);
-        if (access != null && access.HasDownloadedResume)
-        {
-            return Ok(new { ResumeUrl = candidate.ResumeUrl, CreditsDeducted = 0, RemainingBalance = balance });
         }
 
         var deductionSuccess = await _creditService.DeductCreditsAsync(recruiter.Id, requiredCredits, Domain.Enums.TransactionType.RecruiterResumeDownload, candidate.Id.ToString(), $"Downloaded resume for candidate {candidate.User.FirstName}", userId);
@@ -401,6 +422,7 @@ public class CandidatesController : ControllerBase
             access = new MyNaukri.Domain.Entities.CandidateContactAccess 
             { 
                 RecruiterId = recruiter.Id, 
+                InstitutionId = recruiter.InstitutionId,
                 CandidateId = id, 
                 HasDownloadedResume = true,
                 HasUnlockedContact = false
@@ -409,6 +431,7 @@ public class CandidatesController : ControllerBase
         }
         else
         {
+            access.InstitutionId = recruiter.InstitutionId;
             access.HasDownloadedResume = true;
         }
         await _context.SaveChangesAsync();
@@ -435,6 +458,25 @@ public class CandidatesController : ControllerBase
             return Ok(new { Email = candidate.User.Email, PhoneNumber = candidate.PhoneNumber, CreditsDeducted = 0 });
         }
 
+        // Check if any recruiter in this institution has already unlocked the contact
+        var existingInstitutionAccess = await _context.CandidateContactAccesses
+            .Include(a => a.Recruiter)
+            .FirstOrDefaultAsync(a => 
+                (a.InstitutionId == recruiter.InstitutionId || (a.Recruiter != null && a.Recruiter.InstitutionId == recruiter.InstitutionId)) &&
+                a.CandidateId == id && 
+                a.HasUnlockedContact);
+
+        if (existingInstitutionAccess != null)
+        {
+            return Ok(new { 
+                Email = candidate.User.Email, 
+                PhoneNumber = candidate.PhoneNumber, 
+                CreditsDeducted = 0,
+                AlreadyUnlockedByInstitution = true,
+                Message = "Contact already unlocked by your institution." 
+            });
+        }
+
         var rates = await _creditService.GetRatesAsync(recruiter.Id);
         int requiredCredits = rates.ContactViewRate ?? 2;
         var balance = await _creditService.GetBalanceAsync(recruiter.Id);
@@ -452,6 +494,7 @@ public class CandidatesController : ControllerBase
             access = new MyNaukri.Domain.Entities.CandidateContactAccess
             {
                 RecruiterId = recruiter.Id,
+                InstitutionId = recruiter.InstitutionId,
                 CandidateId = candidate.Id,
                 HasUnlockedContact = true,
                 HasDownloadedResume = false,
@@ -461,6 +504,7 @@ public class CandidatesController : ControllerBase
         }
         else
         {
+            access.InstitutionId = recruiter.InstitutionId;
             access.HasUnlockedContact = true;
             access.CreditsCharged += requiredCredits;
         }
@@ -544,8 +588,9 @@ public class CandidatesController : ControllerBase
             {
                 var candidateIds = candidates.Select(c => c.Id).ToList();
                 var accesses = await _context.CandidateContactAccesses
-                    .Where(a => a.RecruiterId == recruiter.Id && candidateIds.Contains(a.CandidateId))
-                    .ToDictionaryAsync(a => a.CandidateId);
+                    .Include(a => a.Recruiter)
+                    .Where(a => (a.RecruiterId == recruiter.Id || a.InstitutionId == recruiter.InstitutionId || (a.Recruiter != null && a.Recruiter.InstitutionId == recruiter.InstitutionId)) && candidateIds.Contains(a.CandidateId))
+                    .ToListAsync();
 
                 if (accesses.Any())
                 {
@@ -553,27 +598,33 @@ public class CandidatesController : ControllerBase
                         .Where(c => candidateIds.Contains(c.Id))
                         .ToDictionaryAsync(c => c.Id);
 
+                    var contactUnlockedCandidateIds = accesses.Where(a => a.HasUnlockedContact).Select(a => a.CandidateId).ToHashSet();
+                    var resumeDownloadedCandidateIds = accesses.Where(a => a.HasDownloadedResume).Select(a => a.CandidateId).ToHashSet();
+                    var directUnlockedCandidateIds = accesses.Where(a => a.RecruiterId == recruiter.Id && (a.HasUnlockedContact || a.HasDownloadedResume)).Select(a => a.CandidateId).ToHashSet();
+
                     foreach (var dto in candidates)
                     {
-                        if (accesses.TryGetValue(dto.Id, out var access))
+                        if (contactUnlockedCandidateIds.Contains(dto.Id))
                         {
-                            if (access.HasUnlockedContact)
+                            dto.HasUnlockedContact = true;
+                            if (candidatesEntities.TryGetValue(dto.Id, out var cand))
                             {
-                                dto.HasUnlockedContact = true;
-                                if (candidatesEntities.TryGetValue(dto.Id, out var cand))
-                                {
-                                    dto.Email = cand.User.Email;
-                                    dto.PhoneNumber = cand.PhoneNumber;
-                                }
+                                dto.Email = cand.User.Email;
+                                dto.PhoneNumber = cand.PhoneNumber;
                             }
-                            if (access.HasDownloadedResume)
+                        }
+                        if (resumeDownloadedCandidateIds.Contains(dto.Id))
+                        {
+                            dto.HasDownloadedResume = true;
+                            if (candidatesEntities.TryGetValue(dto.Id, out var cand))
                             {
-                                dto.HasDownloadedResume = true;
-                                if (candidatesEntities.TryGetValue(dto.Id, out var cand))
-                                {
-                                    dto.ResumeUrl = cand.ResumeUrl;
-                                }
+                                dto.ResumeUrl = cand.ResumeUrl;
                             }
+                        }
+
+                        if ((contactUnlockedCandidateIds.Contains(dto.Id) || resumeDownloadedCandidateIds.Contains(dto.Id)) && !directUnlockedCandidateIds.Contains(dto.Id))
+                        {
+                            dto.AlreadyUnlockedByInstitution = true;
                         }
                     }
                 }

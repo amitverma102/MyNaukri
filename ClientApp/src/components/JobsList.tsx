@@ -23,6 +23,7 @@ import { formatDate } from '../utils/dateUtils';
 import JobAiMatchDialog from './candidate/JobAiMatchDialog';
 import TailorResumeDialog from './candidate/TailorResumeDialog';
 import ApplyJobDialog from './candidate/ApplyJobDialog';
+import JobDetailsDialog from './candidate/JobDetailsDialog';
 
 function formatTimeAgo(dateString?: string) {
   if (!dateString) return '';
@@ -71,6 +72,7 @@ export default function JobsList() {
   // AI Match & Tailor Dialog States
   const [matchDialogJob, setMatchDialogJob] = useState<any | null>(null);
   const [tailorDialogJob, setTailorDialogJob] = useState<any | null>(null);
+  const [detailsJob, setDetailsJob] = useState<any | null>(null);
 
   const { data: jobs, isLoading: isJobsLoading } = useQuery({
     queryKey: ['jobs'],
@@ -247,7 +249,24 @@ export default function JobsList() {
                   </Avatar>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
-                      <Typography variant="h6" component="div" sx={{ fontWeight: 600 }}>
+                      <Typography
+                        variant="h6"
+                        component="a"
+                        href={`/jobs/${job.id}`}
+                        onClick={(e) => {
+                          if (!e.ctrlKey && !e.metaKey) {
+                            e.preventDefault();
+                            setDetailsJob(job);
+                          }
+                        }}
+                        sx={{
+                          fontWeight: 600,
+                          color: 'text.primary',
+                          textDecoration: 'none',
+                          cursor: 'pointer',
+                          '&:hover': { color: 'primary.main', textDecoration: 'underline' }
+                        }}
+                      >
                         {job.title}
                       </Typography>
                       <Chip label="AI Top Match" color="primary" size="small" sx={{ fontWeight: 600 }} />
@@ -266,7 +285,28 @@ export default function JobsList() {
                     ) : (
                       <span style={{ fontWeight: 600 }}>{job.companyName || 'Unknown Institution'}</span>
                     )}
-                    • Job ID: {job.id?.substring(0, 8)}
+                    • <Tooltip title="Click to view full job details">
+                      <Typography
+                        component="a"
+                        href={`/jobs/${job.id}`}
+                        onClick={(e) => {
+                          if (!e.ctrlKey && !e.metaKey) {
+                            e.preventDefault();
+                            setDetailsJob(job);
+                          }
+                        }}
+                        variant="body2"
+                        sx={{
+                          cursor: 'pointer',
+                          color: '#1976d2',
+                          fontWeight: 600,
+                          textDecoration: 'underline',
+                          display: 'inline'
+                        }}
+                      >
+                        Job ID: {job.id?.substring(0, 8)}
+                      </Typography>
+                    </Tooltip>
                     {job.createdAt && (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', marginLeft: '6px' }}>
                         <AccessTimeIcon sx={{ fontSize: '0.9rem' }} /> {formatTimeAgo(job.createdAt)}
@@ -510,7 +550,24 @@ export default function JobsList() {
                 </Avatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
-                    <Typography variant="h6" component="div" sx={{ fontWeight: 600 }}>
+                    <Typography
+                      variant="h6"
+                      component="a"
+                      href={`/jobs/${job.id}`}
+                      onClick={(e) => {
+                        if (!e.ctrlKey && !e.metaKey) {
+                          e.preventDefault();
+                          setDetailsJob(job);
+                        }
+                      }}
+                      sx={{
+                        fontWeight: 600,
+                        color: 'text.primary',
+                        textDecoration: 'none',
+                        cursor: 'pointer',
+                        '&:hover': { color: 'primary.main', textDecoration: 'underline' }
+                      }}
+                    >
                       {job.title}
                     </Typography>
                     {job.isPlatinum && (
@@ -540,7 +597,28 @@ export default function JobsList() {
                   ) : (
                     <span style={{ fontWeight: 600 }}>{job.companyName || 'Unknown Institution'}</span>
                   )}
-                  • Job ID: {job.id?.substring(0, 8)}
+                  • <Tooltip title="Click to view full job details">
+                    <Typography
+                      component="a"
+                      href={`/jobs/${job.id}`}
+                      onClick={(e) => {
+                        if (!e.ctrlKey && !e.metaKey) {
+                          e.preventDefault();
+                          setDetailsJob(job);
+                        }
+                      }}
+                      variant="body2"
+                      sx={{
+                        cursor: 'pointer',
+                        color: '#1976d2',
+                        fontWeight: 600,
+                        textDecoration: 'underline',
+                        display: 'inline'
+                      }}
+                    >
+                      Job ID: {job.id?.substring(0, 8)}
+                    </Typography>
+                  </Tooltip>
                   {job.createdAt && (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', marginLeft: '6px' }}>
                       <AccessTimeIcon sx={{ fontSize: '0.9rem' }} /> {formatTimeAgo(job.createdAt)}
@@ -644,6 +722,16 @@ export default function JobsList() {
           queryClient.invalidateQueries({ queryKey: ['jobs'] });
           queryClient.invalidateQueries({ queryKey: ['jobs-recommendations'] });
         }}
+      />
+
+      {/* Job Details Modal Dialog */}
+      <JobDetailsDialog
+        open={Boolean(detailsJob)}
+        job={detailsJob}
+        onClose={() => setDetailsJob(null)}
+        onApply={(targetJob) => handleInitiateApply(targetJob)}
+        onOpenAiMatch={(targetJob) => setMatchDialogJob(targetJob)}
+        onOpenTailorResume={(targetJob) => setTailorDialogJob(targetJob)}
       />
     </Container>
   );

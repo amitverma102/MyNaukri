@@ -33,6 +33,7 @@ public class CandidateSearchResultDto
     // Access flags
     public bool HasUnlockedContact { get; set; }
     public bool HasDownloadedResume { get; set; }
+    public bool AlreadyUnlockedByInstitution { get; set; }
     
     // These will be populated ONLY if the corresponding access is unlocked
     public string? Email { get; set; }

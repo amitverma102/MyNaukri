@@ -29,10 +29,17 @@ public class SavedJobsController : ControllerBase
         var candidate = await _context.Candidates.FirstOrDefaultAsync(c => c.UserId == userId);
         if (candidate == null) return StatusCode(403, "User is not registered as a candidate.");
 
+        var appliedJobIds = (await _context.JobApplications
+            .Where(ja => ja.CandidateId == candidate.Id)
+            .Select(ja => ja.JobId)
+            .ToListAsync())
+            .ToHashSet();
+
         var savedJobs = await _context.SavedJobs
             .Include(s => s.Job)
             .ThenInclude(j => j.Institution)
             .Where(s => s.CandidateId == candidate.Id)
+            .OrderByDescending(s => s.CreatedAt)
             .Select(s => new SavedJobDto
             {
                 Id = s.Id,
@@ -40,14 +47,31 @@ public class SavedJobsController : ControllerBase
                 JobId = s.JobId,
                 CreatedAt = s.CreatedAt,
                 JobTitle = s.Job.Title,
+                JobDescription = s.Job.Description,
+                JobRequirements = s.Job.Requirements,
                 JobLocation = s.Job.Location,
-                CompanyName = s.Job.Institution != null ? s.Job.Institution.Name : "Company Name placeholder",
+                JobType = s.Job.JobType.ToString(),
+                CompanyName = s.Job.Institution != null ? s.Job.Institution.Name : "Verified Institution",
+                InstitutionId = s.Job.InstitutionId,
                 MinSalary = s.Job.MinSalary,
                 MaxSalary = s.Job.MaxSalary,
                 IsActive = s.Job.IsActive,
-                InstitutionLogoUrl = s.Job.Institution != null ? s.Job.Institution.LogoUrl : null
+                InstitutionLogoUrl = s.Job.Institution != null ? s.Job.Institution.LogoUrl : null,
+                IsPlatinum = s.Job.IsPlatinum,
+                WorkMode = s.Job.WorkMode,
+                BoardAffiliation = s.Job.BoardAffiliation,
+                SubjectDepartment = s.Job.SubjectDepartment,
+                ScreeningQuestionsJson = s.Job.ScreeningQuestionsJson,
+                Keywords = s.Job.Keywords,
+                JobCreatedAt = s.Job.CreatedAt,
+                IsApplied = false
             })
             .ToListAsync();
+
+        foreach (var sj in savedJobs)
+        {
+            sj.IsApplied = appliedJobIds.Contains(sj.JobId);
+        }
 
         return Ok(savedJobs);
     }

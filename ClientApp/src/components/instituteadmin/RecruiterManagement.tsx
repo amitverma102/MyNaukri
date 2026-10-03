@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Container, Typography, Paper, Box, Button, TableContainer, Table, TableHead, TableRow, TableCell, TableBody,
   Grid, Card, CardContent, TextField, Select, MenuItem, InputLabel, FormControl, Chip, IconButton, Tooltip,
-  Tabs, Tab, TablePagination, CircularProgress
+  Tabs, Tab, TablePagination, CircularProgress, Alert
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import BlockIcon from '@mui/icons-material/Block';
@@ -12,6 +12,8 @@ import PeopleIcon from '@mui/icons-material/People';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import WorkOutlineIcon from '@mui/icons-material/Work';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import { formatDate, formatDateTime } from '../../utils/dateUtils';
@@ -145,14 +147,76 @@ const RecruiterManagement = () => {
     }
   }, [activeTab, auditPage, auditPageSize, appliedAuditFilters]);
 
-  const handleDeactivate = async (id: string) => {
-    if (!window.confirm("Are you sure you want to deactivate this recruiter?\n\nExisting jobs, applications and credit transaction history will be retained.")) return;
+  // Reassign Jobs modal state
+  const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+  const [reassignSourceRecruiter, setReassignSourceRecruiter] = useState<any>(null);
+  const [reassignTargetRecruiterId, setReassignTargetRecruiterId] = useState('');
+  const [isReassignSubmitting, setIsReassignSubmitting] = useState(false);
+
+  // Deactivate confirmation modal state (with optional reassign)
+  const [deactivateModal, setDeactivateModal] = useState<{
+    open: boolean;
+    recruiter: any;
+    reassignToRecruiterId: string;
+    isSubmitting: boolean;
+  }>({
+    open: false,
+    recruiter: null,
+    reassignToRecruiterId: '',
+    isSubmitting: false
+  });
+
+  const handleDeactivateClick = (recruiter: any) => {
+    if (recruiter.totalJobsCount > 0) {
+      setDeactivateModal({
+        open: true,
+        recruiter,
+        reassignToRecruiterId: '',
+        isSubmitting: false
+      });
+    } else {
+      if (!window.confirm(`Are you sure you want to deactivate recruiter ${recruiter.firstName} ${recruiter.lastName}?`)) return;
+      executeDeactivate(recruiter.id);
+    }
+  };
+
+  const executeDeactivate = async (id: string, reassignToId?: string) => {
     try {
-      await api.delete(`/instituteadmin/recruiters/${id}`);
+      const url = reassignToId 
+        ? `/instituteadmin/recruiters/${id}?reassignToRecruiterId=${reassignToId}`
+        : `/instituteadmin/recruiters/${id}`;
+      const res = await api.delete(url);
+      alert(res.data?.message || 'Recruiter deactivated successfully.');
+      setDeactivateModal({ open: false, recruiter: null, reassignToRecruiterId: '', isSubmitting: false });
       fetchSummary();
       fetchRecruiters();
     } catch (err: any) {
-      alert(err.response?.data || 'Failed to deactivate recruiter');
+      alert(err.response?.data?.message || err.response?.data || 'Failed to deactivate recruiter');
+    }
+  };
+
+  const openReassignModal = (recruiter: any) => {
+    setReassignSourceRecruiter(recruiter);
+    setReassignTargetRecruiterId('');
+    setIsReassignModalOpen(true);
+  };
+
+  const handleExecuteReassign = async () => {
+    if (!reassignSourceRecruiter || !reassignTargetRecruiterId) return;
+    try {
+      setIsReassignSubmitting(true);
+      const res = await api.post(`/instituteadmin/recruiters/${reassignSourceRecruiter.id}/reassign-jobs`, {
+        targetRecruiterId: reassignTargetRecruiterId
+      });
+      alert(res.data?.message || 'Jobs successfully reassigned.');
+      setIsReassignModalOpen(false);
+      setReassignSourceRecruiter(null);
+      setReassignTargetRecruiterId('');
+      fetchRecruiters();
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.response?.data || 'Failed to reassign jobs');
+    } finally {
+      setIsReassignSubmitting(false);
     }
   };
 
@@ -401,6 +465,7 @@ const RecruiterManagement = () => {
                   <TableCell sx={{ fontWeight: 'bold' }}>Name</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Contact</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Designation / Dept</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Posted Jobs</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Credits</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold' }}>Actions</TableCell>
@@ -422,6 +487,19 @@ const RecruiterManagement = () => {
                       {r.department && <Typography variant="caption" color="textSecondary">{r.department}</Typography>}
                     </TableCell>
                     <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        <WorkOutlineIcon sx={{ fontSize: 16, color: (r.activeJobsCount > 0 ? 'primary.main' : 'text.disabled') }} />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: (r.activeJobsCount > 0 ? 'primary.main' : 'text.primary') }}>
+                            {r.activeJobsCount ?? 0} active
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary">
+                            {r.totalJobsCount ?? 0} total posted
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
                       <Typography sx={{ fontWeight: 700, color: r.credits > 0 ? 'primary.main' : 'text.secondary' }}>
                         {r.credits}
                       </Typography>
@@ -433,6 +511,13 @@ const RecruiterManagement = () => {
                       }
                     </TableCell>
                     <TableCell align="right">
+                      {r.totalJobsCount > 0 && (
+                        <Tooltip title={`Reassign ${r.totalJobsCount} posted job(s) to another recruiter`}>
+                          <IconButton color="warning" onClick={() => openReassignModal(r)} size="small">
+                            <SwapHorizIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       <Tooltip title="Allocate / Revoke Credits">
                         <IconButton color="secondary" onClick={() => openCreditDialog(r)} size="small" disabled={!r.isActive}>
                           <AccountBalanceWalletIcon />
@@ -450,7 +535,7 @@ const RecruiterManagement = () => {
                       </Tooltip>
                       {r.isActive ? (
                         <Tooltip title="Deactivate">
-                          <IconButton color="error" onClick={() => handleDeactivate(r.id)} size="small">
+                          <IconButton color="error" onClick={() => handleDeactivateClick(r)} size="small">
                             <BlockIcon />
                           </IconButton>
                         </Tooltip>
@@ -466,7 +551,7 @@ const RecruiterManagement = () => {
                 ))}
                 {recruiters.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>No recruiters found.</TableCell>
+                    <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>No recruiters found.</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -741,6 +826,132 @@ const RecruiterManagement = () => {
             disabled={creditAmount <= 0 || (wallet && creditAmount > wallet.availableCredits)}
           >
             Allocate
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* MODAL: DEACTIVATE RECRUITER WITH JOB REASSIGNMENT OPTION */}
+      <Dialog 
+        open={deactivateModal.open} 
+        onClose={() => setDeactivateModal(prev => ({ ...prev, open: false }))}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 'bold', color: 'error.main' }}>
+          Deactivate Recruiter
+        </DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body1" sx={{ mb: 1 }}>
+              Are you sure you want to deactivate <strong>{deactivateModal.recruiter?.firstName} {deactivateModal.recruiter?.lastName}</strong> ({deactivateModal.recruiter?.email})?
+            </Typography>
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              This recruiter has <strong>{deactivateModal.recruiter?.totalJobsCount} posted job(s)</strong> ({deactivateModal.recruiter?.activeJobsCount} currently active).
+            </Alert>
+            <Typography variant="body2" color="textSecondary" sx={{ mb: 1.5 }}>
+              To ensure hiring continuity, you can reassign their jobs to another active recruiter in your institution, or deactivate without reassigning.
+            </Typography>
+
+            <FormControl fullWidth size="small" sx={{ mt: 1 }}>
+              <InputLabel>Reassign Jobs To</InputLabel>
+              <Select
+                value={deactivateModal.reassignToRecruiterId}
+                label="Reassign Jobs To"
+                onChange={(e) => setDeactivateModal(prev => ({ ...prev, reassignToRecruiterId: e.target.value }))}
+              >
+                <MenuItem value="">
+                  <em>-- Do not reassign (keep on this recruiter profile) --</em>
+                </MenuItem>
+                {recruiters
+                  .filter(r => r.id !== deactivateModal.recruiter?.id && r.isActive)
+                  .map(r => (
+                    <MenuItem key={r.id} value={r.id}>
+                      {r.firstName} {r.lastName} ({r.email}) {r.designation ? `• ${r.designation}` : ''}
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
+          <Button onClick={() => setDeactivateModal(prev => ({ ...prev, open: false }))}>
+            Cancel
+          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={() => executeDeactivate(deactivateModal.recruiter.id)}
+            >
+              Deactivate Only
+            </Button>
+            {deactivateModal.reassignToRecruiterId && (
+              <Button
+                variant="contained"
+                color="warning"
+                onClick={() => executeDeactivate(deactivateModal.recruiter.id, deactivateModal.reassignToRecruiterId)}
+              >
+                Reassign Jobs & Deactivate
+              </Button>
+            )}
+          </Box>
+        </DialogActions>
+      </Dialog>
+
+      {/* MODAL: STANDALONE REASSIGN JOBS */}
+      <Dialog
+        open={isReassignModalOpen}
+        onClose={() => setIsReassignModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 'bold' }}>
+          Reassign Jobs
+        </DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body1" sx={{ mb: 1 }}>
+              Reassign all jobs currently posted by <strong>{reassignSourceRecruiter?.firstName} {reassignSourceRecruiter?.lastName}</strong> ({reassignSourceRecruiter?.email}).
+            </Typography>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Total jobs to transfer: <strong>{reassignSourceRecruiter?.totalJobsCount}</strong> ({reassignSourceRecruiter?.activeJobsCount} active).
+            </Alert>
+            <Typography variant="body2" color="textSecondary" sx={{ mb: 1.5 }}>
+              Select an active recruiter in your institution who will take over ownership of these jobs.
+            </Typography>
+
+            <FormControl fullWidth size="small">
+              <InputLabel>Select Target Recruiter</InputLabel>
+              <Select
+                value={reassignTargetRecruiterId}
+                label="Select Target Recruiter"
+                onChange={(e) => setReassignTargetRecruiterId(e.target.value)}
+              >
+                <MenuItem value="" disabled>
+                  Select a recruiter
+                </MenuItem>
+                {recruiters
+                  .filter(r => r.id !== reassignSourceRecruiter?.id && r.isActive)
+                  .map(r => (
+                    <MenuItem key={r.id} value={r.id}>
+                      {r.firstName} {r.lastName} ({r.email}) {r.designation ? `• ${r.designation}` : ''}
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setIsReassignModalOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            disabled={!reassignTargetRecruiterId || isReassignSubmitting}
+            onClick={handleExecuteReassign}
+          >
+            {isReassignSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Transfer Jobs'}
           </Button>
         </DialogActions>
       </Dialog>

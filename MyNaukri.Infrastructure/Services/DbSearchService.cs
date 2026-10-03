@@ -21,7 +21,7 @@ public class DbSearchService : ISearchService
     {
         var dbQuery = _context.Jobs
             .Include(j => j.Institution)
-            .Where(j => j.IsActive)
+            .Where(j => j.IsActive && j.ApprovalStatus == JobApprovalStatus.Approved)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(query))
@@ -109,7 +109,7 @@ public class DbSearchService : ISearchService
     {
         var dbQuery = _context.Jobs
             .Include(j => j.Institution)
-            .Where(j => j.IsActive)
+            .Where(j => j.IsActive && j.ApprovalStatus == JobApprovalStatus.Approved)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(request.Query))
@@ -683,20 +683,25 @@ public class DbSearchService : ISearchService
         }
 
         var candidateIds = candidates.Select(c => c.Id).ToList();
-        Dictionary<Guid, CandidateContactAccess> accesses = new();
-        if (recruiterId.HasValue)
-        {
-            accesses = await _context.CandidateContactAccesses
-                .Where(a => a.RecruiterId == recruiterId.Value && candidateIds.Contains(a.CandidateId))
-                .ToDictionaryAsync(a => a.CandidateId);
-        }
+        var contactUnlockedCandidateIds = new HashSet<Guid>();
+        var resumeDownloadedCandidateIds = new HashSet<Guid>();
+
+        Guid institutionId = job.InstitutionId;
+        var accesses = await _context.CandidateContactAccesses
+            .Include(a => a.Recruiter)
+            .Where(a => ((a.InstitutionId == institutionId || (a.Recruiter != null && a.Recruiter.InstitutionId == institutionId)) ||
+                         (recruiterId.HasValue && a.RecruiterId == recruiterId.Value)) && candidateIds.Contains(a.CandidateId))
+            .ToListAsync();
+
+        contactUnlockedCandidateIds = accesses.Where(a => a.HasUnlockedContact).Select(a => a.CandidateId).ToHashSet();
+        resumeDownloadedCandidateIds = accesses.Where(a => a.HasDownloadedResume).Select(a => a.CandidateId).ToHashSet();
 
         var dtoList = candidates.Select(c =>
         {
             var (aiScore, aiReason) = CalculateAiRecommendation(c, searchRequest);
 
-            bool hasUnlockedContact = accesses.TryGetValue(c.Id, out var access) && access.HasUnlockedContact;
-            bool hasDownloadedResume = access != null && access.HasDownloadedResume;
+            bool hasUnlockedContact = contactUnlockedCandidateIds.Contains(c.Id);
+            bool hasDownloadedResume = resumeDownloadedCandidateIds.Contains(c.Id);
 
             return new CandidateSearchResultDto
             {
@@ -727,6 +732,7 @@ public class DbSearchService : ISearchService
                 UpdatedAt = c.UpdatedAt ?? c.CreatedAt,
                 HasUnlockedContact = hasUnlockedContact,
                 HasDownloadedResume = hasDownloadedResume,
+                AlreadyUnlockedByInstitution = accesses.Any(a => a.CandidateId == c.Id && (!recruiterId.HasValue || a.RecruiterId != recruiterId.Value) && (a.HasUnlockedContact || a.HasDownloadedResume)),
                 AiRecommendationScore = aiScore,
                 AiRecommendationReason = aiReason
             };

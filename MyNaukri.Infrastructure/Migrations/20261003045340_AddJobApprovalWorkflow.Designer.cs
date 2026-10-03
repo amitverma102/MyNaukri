@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyNaukri.Infrastructure.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MyNaukri.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261003045340_AddJobApprovalWorkflow")]
+    partial class AddJobApprovalWorkflow
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -219,9 +222,6 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Property<bool>("HasUnlockedContact")
                         .HasColumnType("boolean");
 
-                    b.Property<Guid?>("InstitutionId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid>("RecruiterId")
                         .HasColumnType("uuid");
 
@@ -231,8 +231,6 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CandidateId");
-
-                    b.HasIndex("InstitutionId", "CandidateId");
 
                     b.HasIndex("RecruiterId", "CandidateId")
                         .IsUnique();
@@ -725,9 +723,6 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Property<bool>("IsPlatinum")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("IsRestrictedAccess")
-                        .HasColumnType("boolean");
-
                     b.Property<int>("JobType")
                         .HasColumnType("integer");
 
@@ -813,14 +808,8 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Property<int?>("InterviewMode")
                         .HasColumnType("integer");
 
-                    b.Property<DateTime?>("InterviewReminderSentAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("InterviewVenue")
                         .HasColumnType("text");
-
-                    b.Property<bool>("IsInterviewReminderSent")
-                        .HasColumnType("boolean");
 
                     b.Property<Guid>("JobId")
                         .HasColumnType("uuid");
@@ -878,40 +867,6 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("JobApplicationComments");
-                });
-
-            modelBuilder.Entity("MyNaukri.Domain.Entities.JobRecruiterAssignment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("AssignedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("AssignedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("JobId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("RecruiterId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RecruiterId");
-
-                    b.HasIndex("JobId", "RecruiterId")
-                        .IsUnique();
-
-                    b.ToTable("JobRecruiterAssignments");
                 });
 
             modelBuilder.Entity("MyNaukri.Domain.Entities.RechargePlan", b =>
@@ -1265,11 +1220,6 @@ namespace MyNaukri.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("MyNaukri.Domain.Entities.Institution", "Institution")
-                        .WithMany()
-                        .HasForeignKey("InstitutionId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("MyNaukri.Domain.Entities.Recruiter", "Recruiter")
                         .WithMany("ContactAccesses")
                         .HasForeignKey("RecruiterId")
@@ -1277,8 +1227,6 @@ namespace MyNaukri.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Candidate");
-
-                    b.Navigation("Institution");
 
                     b.Navigation("Recruiter");
                 });
@@ -1504,25 +1452,6 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("MyNaukri.Domain.Entities.JobRecruiterAssignment", b =>
-                {
-                    b.HasOne("MyNaukri.Domain.Entities.Job", "Job")
-                        .WithMany("AssignedRecruiters")
-                        .HasForeignKey("JobId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("MyNaukri.Domain.Entities.Recruiter", "Recruiter")
-                        .WithMany()
-                        .HasForeignKey("RecruiterId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Job");
-
-                    b.Navigation("Recruiter");
-                });
-
             modelBuilder.Entity("MyNaukri.Domain.Entities.Recruiter", b =>
                 {
                     b.HasOne("MyNaukri.Domain.Entities.Institution", "Institution")
@@ -1615,8 +1544,6 @@ namespace MyNaukri.Infrastructure.Migrations
             modelBuilder.Entity("MyNaukri.Domain.Entities.Job", b =>
                 {
                     b.Navigation("Applications");
-
-                    b.Navigation("AssignedRecruiters");
                 });
 
             modelBuilder.Entity("MyNaukri.Domain.Entities.JobApplication", b =>

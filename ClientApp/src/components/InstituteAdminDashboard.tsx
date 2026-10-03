@@ -6,11 +6,13 @@ import RechargeModal from './instituteadmin/RechargeModal';
 import CreditTransactionTable from './superadmin/CreditTransactionTable';
 import BusinessIcon from '@mui/icons-material/Business';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
 
 export default function InstituteAdminDashboard() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [recruiterSummary, setRecruiterSummary] = useState<any>(null);
   const [institution, setInstitution] = useState<any>(null);
+  const [pendingApprovalCount, setPendingApprovalCount] = useState<number>(0);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [logoMsg, setLogoMsg] = useState<{ text: string; severity: 'success' | 'error' } | null>(null);
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
@@ -23,15 +25,19 @@ export default function InstituteAdminDashboard() {
 
   const fetchData = async () => {
     try {
-      const [dashboardRes, summaryRes, instRes] = await Promise.all([
+      const [dashboardRes, summaryRes, instRes, approvalsRes] = await Promise.all([
         api.get('/instituteadmin/wallet/dashboard'),
         api.get('/instituteadmin/recruiters/summary'),
-        api.get('/instituteadmin/institution').catch(() => null)
+        api.get('/instituteadmin/institution').catch(() => null),
+        api.get('/instituteadmin/approvals/jobs?status=pending').catch(() => null)
       ]);
       setDashboard(dashboardRes.data);
       setRecruiterSummary(summaryRes.data);
       if (instRes) {
         setInstitution(instRes.data);
+      }
+      if (approvalsRes) {
+        setPendingApprovalCount(approvalsRes.data.pendingCount ?? 0);
       }
     } catch (err) {
       console.error('Failed to fetch data', err);
@@ -141,35 +147,38 @@ export default function InstituteAdminDashboard() {
       )}
       
       <Grid container spacing={3}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ bgcolor: 'secondary.light', color: 'secondary.contrastText', height: '100%', borderRadius: 3 }}>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Card sx={{ bgcolor: 'secondary.light', color: 'secondary.contrastText', height: '100%', borderRadius: 3, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <CardContent>
               <Typography variant="h6">Institution Wallet Balance</Typography>
               <Typography variant="h2" sx={{ mt: 2 }}>{dashboard?.availableCredits ?? 0}</Typography>
-              <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                <Typography variant="body2">
-                  Total Purchased: {dashboard?.totalPurchasedCredits ?? 0}
+              <Box sx={{ mt: 2, display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                <Typography variant="caption" sx={{ opacity: 0.95 }}>
+                  Purchased: {dashboard?.totalPurchasedCredits ?? 0}
                 </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Total Allocated: {dashboard?.totalAllocatedCredits ?? 0}
+                <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                  Allocated: {dashboard?.totalAllocatedCredits ?? 0}
                 </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Unused Credits: {dashboard?.unusedCredits ?? 0}
+                <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                  Unused: {dashboard?.unusedCredits ?? 0}
                 </Typography>
               </Box>
+            </CardContent>
+            <Box sx={{ p: 2, pt: 0 }}>
               <Button 
                 variant="contained" 
                 color="primary" 
-                sx={{ mt: 3, bgcolor: 'white', color: 'secondary.main', '&:hover': { bgcolor: '#f5f5f5' }, textTransform: 'none', fontWeight: 600 }}
+                fullWidth
+                sx={{ bgcolor: 'white', color: 'secondary.main', '&:hover': { bgcolor: '#f5f5f5' }, textTransform: 'none', fontWeight: 600 }}
                 onClick={() => setIsPurchaseModalOpen(true)}
               >
                 Recharge Credits
               </Button>
-            </CardContent>
+            </Box>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ height: '100%', borderRadius: 3 }}>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Card sx={{ height: '100%', borderRadius: 3, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>Recruiter Summary</Typography>
               {recruiterSummary ? (
@@ -177,29 +186,67 @@ export default function InstituteAdminDashboard() {
                   <Typography variant="body1">
                     Active Recruiters: <strong>{recruiterSummary.currentRecruiters} / {recruiterSummary.maxRecruiters}</strong>
                   </Typography>
-                  <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
+                  <Typography variant="body1" color="textSecondary" sx={{ mb: 1.5 }}>
                     Available Slots: <strong>{recruiterSummary.availableSlots}</strong>
                   </Typography>
                   
                   {isLimitReached && (
-                    <Typography color="error" variant="body2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                    <Typography color="error" variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 'bold' }}>
                       ⚠ Maximum recruiter limit reached.
                     </Typography>
                   )}
-
-                  <Button 
-                    variant="outlined" 
-                    color="primary"
-                    onClick={() => navigate('/instituteadmin/recruiters')}
-                    sx={{ textTransform: 'none', fontWeight: 600 }}
-                  >
-                    Manage Recruiters
-                  </Button>
                 </Box>
               ) : (
                 <Typography>Loading summary...</Typography>
               )}
             </CardContent>
+            <Box sx={{ p: 2, pt: 0 }}>
+              <Button 
+                variant="outlined" 
+                color="primary"
+                fullWidth
+                onClick={() => navigate('/instituteadmin/recruiters')}
+                sx={{ textTransform: 'none', fontWeight: 600 }}
+              >
+                Manage Recruiters
+              </Button>
+            </Box>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Card sx={{ height: '100%', borderRadius: 3, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: pendingApprovalCount > 0 ? '1.5px solid #f59e0b' : '1px solid #e2e8f0' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                <Typography variant="h6">Pending Approvals</Typography>
+                <Avatar sx={{ bgcolor: pendingApprovalCount > 0 ? '#fef3c7' : '#f1f5f9', color: pendingApprovalCount > 0 ? '#d97706' : '#64748b', width: 40, height: 40 }}>
+                  <FactCheckIcon fontSize="small" />
+                </Avatar>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, my: 1.5 }}>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: pendingApprovalCount > 0 ? '#b45309' : '#334155' }}>
+                  {pendingApprovalCount}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {pendingApprovalCount === 1 ? 'Job awaiting review' : 'Jobs awaiting review'}
+                </Typography>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                {pendingApprovalCount > 0
+                  ? 'Recruiters have submitted jobs requiring your review before going live.'
+                  : 'All recruiter job postings are up-to-date.'}
+              </Typography>
+            </CardContent>
+            <Box sx={{ p: 2, pt: 0 }}>
+              <Button 
+                variant="contained" 
+                color={pendingApprovalCount > 0 ? 'warning' : 'primary'}
+                fullWidth
+                onClick={() => navigate('/instituteadmin/approvals')}
+                sx={{ textTransform: 'none', fontWeight: 600 }}
+              >
+                {pendingApprovalCount > 0 ? `Review Approvals (${pendingApprovalCount})` : 'Approval Settings & History'}
+              </Button>
+            </Box>
           </Card>
         </Grid>
       </Grid>

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using MyNaukri.Application.Interfaces;
 using MyNaukri.Domain.Entities;
 using MyNaukri.Domain.Enums;
@@ -10,11 +11,13 @@ public class CreditService : ICreditService
 {
     private readonly ApplicationDbContext _context;
     private readonly ICreditLedgerService _creditLedgerService;
+    private readonly IConfiguration? _configuration;
 
-    public CreditService(ApplicationDbContext context, ICreditLedgerService creditLedgerService)
+    public CreditService(ApplicationDbContext context, ICreditLedgerService creditLedgerService, IConfiguration? configuration = null)
     {
         _context = context;
         _creditLedgerService = creditLedgerService;
+        _configuration = configuration;
     }
 
     public async Task<int> GetBalanceAsync(Guid recruiterId)
@@ -45,14 +48,33 @@ public class CreditService : ICreditService
         return recruiter.Credits;
     }
 
+    private int GetConfigInt(string key, int defaultValue)
+    {
+        var valStr = _configuration?[key];
+        return int.TryParse(valStr, out var parsed) ? parsed : defaultValue;
+    }
+
     public async Task<RecruiterCreditRate> GetRatesAsync(Guid recruiterId)
     {
+        int defaultResumeDownloadRate = GetConfigInt("CreditSettings:ResumeDownloadRate", 5);
+        int defaultContactViewRate = GetConfigInt("CreditSettings:ContactViewRate", 2);
+        int defaultBulkProfileDownloadRate = GetConfigInt("CreditSettings:BulkProfileDownloadRate", 2);
+        int defaultNormalJobPostingRate = GetConfigInt("CreditSettings:NormalJobPostingRate", 20);
+        int defaultPlatinumJobPostingRate = GetConfigInt("CreditSettings:PlatinumJobPostingRate", 40);
+        int defaultCandidateEmailRate = GetConfigInt("CreditSettings:CandidateEmailRate", 3);
+
         var rate = await _context.RecruiterCreditRates
             .AsNoTracking()
             .FirstOrDefaultAsync(r => r.RecruiterId == recruiterId);
             
         if (rate != null)
         {
+            rate.ResumeDownloadRate ??= defaultResumeDownloadRate;
+            rate.ContactViewRate ??= defaultContactViewRate;
+            rate.BulkProfileDownloadRate ??= defaultBulkProfileDownloadRate;
+            rate.NormalJobPostingRate ??= defaultNormalJobPostingRate;
+            rate.CandidateEmailRate ??= defaultCandidateEmailRate;
+
             // If Platinum is not configured, calculate as 2x Normal
             if (!rate.PlatinumJobPostingRate.HasValue && rate.NormalJobPostingRate.HasValue)
             {
@@ -65,12 +87,12 @@ public class CreditService : ICreditService
         return new RecruiterCreditRate
         {
             RecruiterId = recruiterId,
-            ResumeDownloadRate = 5,
-            ContactViewRate = 2,
-            BulkProfileDownloadRate = 2,
-            NormalJobPostingRate = 20,
-            PlatinumJobPostingRate = 40,
-            CandidateEmailRate = 3
+            ResumeDownloadRate = defaultResumeDownloadRate,
+            ContactViewRate = defaultContactViewRate,
+            BulkProfileDownloadRate = defaultBulkProfileDownloadRate,
+            NormalJobPostingRate = defaultNormalJobPostingRate,
+            PlatinumJobPostingRate = defaultPlatinumJobPostingRate,
+            CandidateEmailRate = defaultCandidateEmailRate
         };
     }
 

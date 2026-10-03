@@ -35,6 +35,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<CreditTransactionBatch> CreditTransactionBatches => Set<CreditTransactionBatch>();
     public DbSet<RechargePlan> RechargePlans => Set<RechargePlan>();
     public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
+    public DbSet<JobRecruiterAssignment> JobRecruiterAssignments => Set<JobRecruiterAssignment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -53,6 +54,37 @@ public class ApplicationDbContext : DbContext
             .WithMany(i => i.Jobs)
             .HasForeignKey(j => j.InstitutionId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Job>()
+            .HasOne(j => j.ApprovedByUser)
+            .WithMany()
+            .HasForeignKey(j => j.ApprovedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<JobRecruiterAssignment>()
+            .HasOne(a => a.Job)
+            .WithMany(j => j.AssignedRecruiters)
+            .HasForeignKey(a => a.JobId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<JobRecruiterAssignment>()
+            .HasOne(a => a.Recruiter)
+            .WithMany()
+            .HasForeignKey(a => a.RecruiterId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<JobRecruiterAssignment>()
+            .HasIndex(a => new { a.JobId, a.RecruiterId })
+            .IsUnique();
+
+        modelBuilder.Entity<CandidateContactAccess>()
+            .HasOne(a => a.Institution)
+            .WithMany()
+            .HasForeignKey(a => a.InstitutionId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<CandidateContactAccess>()
+            .HasIndex(a => new { a.InstitutionId, a.CandidateId });
 
         modelBuilder.Entity<JobApplication>()
             .HasOne(a => a.Candidate)

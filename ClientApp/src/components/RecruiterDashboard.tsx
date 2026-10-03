@@ -31,6 +31,9 @@ import VideocamIcon from '@mui/icons-material/Videocam';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import PeopleIcon from '@mui/icons-material/People';
+import LockIcon from '@mui/icons-material/Lock';
+import EmailIcon from '@mui/icons-material/Email';
 
 import api, { API_BASE_URL, getMediaUrl } from '../api/axios';
 import { formatDateTime, formatRelativeTime } from '../utils/dateUtils';
@@ -56,6 +59,17 @@ interface Job {
   subjectDepartment?: string;
   screeningQuestionsJson?: string;
   institutionLogoUrl?: string;
+  approvalStatus?: string;
+  approvalComment?: string;
+  approvedAt?: string;
+  isRestrictedAccess?: boolean;
+  assignedRecruiterIds?: string[];
+  assignedRecruiterNames?: string[];
+  isOwner?: boolean;
+  canManage?: boolean;
+  recruiterName?: string;
+  recruiterEmail?: string;
+  recruiterDesignation?: string;
 }
 
 interface CreditTransaction {
@@ -127,6 +141,7 @@ interface Candidate {
   exServiceman?: boolean;
   hasUnlockedContact?: boolean;
   hasDownloadedResume?: boolean;
+  alreadyUnlockedByInstitution?: boolean;
   noticePeriod?: string;
   isCtetQualified?: boolean;
   demoVideoUrl?: string;
@@ -175,6 +190,25 @@ export default function RecruiterDashboard() {
   const [selectedJobForMatches, setSelectedJobForMatches] = useState<Job | null>(null);
   const [aiMatchedCandidates, setAiMatchedCandidates] = useState<Candidate[]>([]);
   const [isLoadingAiMatches, setIsLoadingAiMatches] = useState(false);
+
+  // Send Job Email Modal state
+  const [isSendJobEmailModalOpen, setIsSendJobEmailModalOpen] = useState(false);
+  const [selectedCandidateForEmail, setSelectedCandidateForEmail] = useState<Candidate | null>(null);
+  const [emailQuote, setEmailQuote] = useState<{
+    emailCost: number;
+    contactUnlockCost: number;
+    resumeUnlockCost: number;
+    totalCost: number;
+    isContactUnlocked: boolean;
+    isResumeUnlocked: boolean;
+    currentBalance: number;
+    hasSufficientBalance: boolean;
+    recipientEmail?: string;
+  } | null>(null);
+  const [customEmailMessage, setCustomEmailMessage] = useState('');
+  const [customEmailSubject, setCustomEmailSubject] = useState('');
+  const [isLoadingEmailQuote, setIsLoadingEmailQuote] = useState(false);
+  const [isSubmittingJobEmail, setIsSubmittingJobEmail] = useState(false);
 
   // Applicant Comments state
   const [activeCommentAppId, setActiveCommentAppId] = useState<string | null>(null);
@@ -304,17 +338,24 @@ export default function RecruiterDashboard() {
     }
   };
 
-  const handleUnlockContact = async (candidateId: string) => {
+  const handleUnlockContact = async (candidateId: string, isInstituteUnlocked?: boolean) => {
     try {
-      const rate = creditRates.contactViewRate || 2;
-      if (!window.confirm(`This will deduct ${rate} credits. Continue?`)) return;
+      const rate = isInstituteUnlocked ? 0 : (creditRates.contactViewRate || 2);
+      if (!isInstituteUnlocked) {
+        if (!window.confirm(`This will deduct ${rate} credits. Continue?`)) return;
+      }
       const response = await api.post(`/candidates/${candidateId}/contact/unlock`);
-      alert(`Contact Unlocked!\nEmail: ${response.data.email}\nPhone: ${response.data.phoneNumber}`);
+      if (response.data.alreadyUnlockedByInstitution) {
+        alert(`Contact Unlocked for Free (Already unlocked by an institute recruiter)!\nEmail: ${response.data.email}\nPhone: ${response.data.phoneNumber}`);
+      } else {
+        alert(`Contact Unlocked!\nEmail: ${response.data.email}\nPhone: ${response.data.phoneNumber}`);
+      }
       fetchCredits(); // update balance
       handleResdexSearch(); // re-fetch search to update flags
       setAiMatchedCandidates(prev => prev.map(c => c.id === candidateId ? {
         ...c,
         hasUnlockedContact: true,
+        alreadyUnlockedByInstitution: true,
         email: response.data.email,
         phoneNumber: response.data.phoneNumber,
         firstName: response.data.firstName || (c.firstName ? c.firstName.replace(/\*\*\*/, '') : ''),
@@ -327,7 +368,7 @@ export default function RecruiterDashboard() {
 
   const handleDownloadResume = async (candidate: Candidate) => {
     try {
-      if (!candidate.hasDownloadedResume) {
+      if (!candidate.hasDownloadedResume && !candidate.alreadyUnlockedByInstitution) {
         const rate = creditRates.resumeDownloadRate || 5;
         if (!window.confirm(`Downloading resume will deduct ${rate} credits. Continue?`)) return;
       }
@@ -343,6 +384,93 @@ export default function RecruiterDashboard() {
       }
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to download resume. Insufficient credits?");
+    }
+  };
+
+  const handleOpenSendJobEmailModal = async (candidate: Candidate) => {
+    if (!selectedJobForMatches) return;
+    setSelectedCandidateForEmail(candidate);
+    setCustomEmailMessage('');
+    const institutionName = selectedJobForMatches.companyName || 'our institution';
+    setCustomEmailSubject(`Job Opportunity: ${selectedJobForMatches.title} at ${institutionName}`);
+    setIsSendJobEmailModalOpen(true);
+    setIsLoadingEmailQuote(true);
+
+    const isContactUnlocked = !!(candidate.hasUnlockedContact || candidate.alreadyUnlockedByInstitution);
+    const isResumeUnlocked = !!(candidate.hasDownloadedResume || candidate.alreadyUnlockedByInstitution);
+    const emailCost = creditRates.candidateEmailRate || 3;
+    const contactUnlockCost = isContactUnlocked ? 0 : (creditRates.contactViewRate || 2);
+    const resumeUnlockCost = isResumeUnlocked ? 0 : (creditRates.resumeDownloadRate || 5);
+    const totalCost = emailCost + contactUnlockCost + resumeUnlockCost;
+
+    setEmailQuote({
+      emailCost,
+      contactUnlockCost,
+      resumeUnlockCost,
+      totalCost,
+      isContactUnlocked,
+      isResumeUnlocked,
+      currentBalance: creditBalance,
+      hasSufficientBalance: creditBalance >= totalCost,
+      recipientEmail: candidate.email
+    });
+
+    try {
+      const res = await api.get(`/jobs/${selectedJobForMatches.id}/matched-candidates/${candidate.id}/email-cost`);
+      if (res.data) {
+        setEmailQuote({
+          emailCost: res.data.emailCost,
+          contactUnlockCost: res.data.contactUnlockCost,
+          resumeUnlockCost: res.data.resumeUnlockCost,
+          totalCost: res.data.totalCost,
+          isContactUnlocked: res.data.isContactUnlocked,
+          isResumeUnlocked: res.data.isResumeUnlocked,
+          currentBalance: res.data.currentBalance ?? creditBalance,
+          hasSufficientBalance: res.data.hasSufficientBalance,
+          recipientEmail: res.data.recipientEmail
+        });
+      }
+    } catch (err) {
+      console.warn('Could not fetch server email cost quote, using client estimate', err);
+    } finally {
+      setIsLoadingEmailQuote(false);
+    }
+  };
+
+  const handleSendJobEmail = async () => {
+    if (!selectedJobForMatches || !selectedCandidateForEmail) return;
+    try {
+      setIsSubmittingJobEmail(true);
+      const payload = {
+        subject: customEmailSubject || undefined,
+        customMessage: customEmailMessage || undefined
+      };
+      const res = await api.post(
+        `/jobs/${selectedJobForMatches.id}/matched-candidates/${selectedCandidateForEmail.id}/email`,
+        payload
+      );
+
+      const updatedCand = res.data.candidate;
+      setAiMatchedCandidates(prev => prev.map(c => c.id === selectedCandidateForEmail.id ? {
+        ...c,
+        hasUnlockedContact: true,
+        hasDownloadedResume: true,
+        alreadyUnlockedByInstitution: true,
+        email: updatedCand?.email || c.email,
+        phoneNumber: updatedCand?.phoneNumber || c.phoneNumber,
+        firstName: updatedCand?.firstName || (c.firstName ? c.firstName.replace(/\*\*\*/, '') : c.firstName),
+        lastName: updatedCand?.lastName || (c.lastName ? c.lastName.replace(/\*\*\*/, '') : c.lastName),
+        resumeUrl: updatedCand?.resumeUrl || c.resumeUrl
+      } : c));
+
+      fetchCredits();
+      setIsSendJobEmailModalOpen(false);
+      alert(`Job Description successfully emailed to ${selectedCandidateForEmail.firstName || 'Candidate'}! (${res.data.creditsDeducted} credits deducted)`);
+    } catch (err: any) {
+      console.error('Failed to send job email', err);
+      alert(err.response?.data?.message || err.message || 'Failed to send email to candidate. Insufficient credits?');
+    } finally {
+      setIsSubmittingJobEmail(false);
     }
   };
 
@@ -769,7 +897,13 @@ export default function RecruiterDashboard() {
                     </TableCell>
                     <TableCell>{job.location}</TableCell>
                     <TableCell>
-                      <Chip label={job.isActive ? 'Active' : 'Closed'} color={job.isActive ? 'success' : 'default'} size="small" />
+                      {job.approvalStatus === 'Pending' ? (
+                        <Chip label="Pending Approval" size="small" sx={{ fontWeight: 'bold', bgcolor: '#fef3c7', color: '#92400e', fontSize: '0.68rem' }} />
+                      ) : job.approvalStatus === 'Rejected' ? (
+                        <Chip label="Rejected" color="error" size="small" sx={{ fontWeight: 'bold', fontSize: '0.68rem' }} />
+                      ) : (
+                        <Chip label={job.isActive ? 'Active' : 'Closed'} color={job.isActive ? 'success' : 'default'} size="small" />
+                      )}
                     </TableCell>
                     <TableCell align="right">
                       <Button 
@@ -857,6 +991,18 @@ export default function RecruiterDashboard() {
                       <Typography variant="caption" color="textSecondary">
                         {jobTypeMap[job.jobType]} {job.companyName ? `• ${job.companyName}` : ''}
                       </Typography>
+                      <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'center', mt: 0.5, flexWrap: 'wrap' }}>
+                        {job.isOwner ? (
+                          <Chip size="small" label="Posted by You" color="primary" variant="outlined" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 600 }} />
+                        ) : (
+                          <Chip size="small" label={`Shared by ${job.recruiterName || 'Peer Recruiter'}`} color="info" variant="outlined" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 600 }} />
+                        )}
+                        {job.isRestrictedAccess ? (
+                          <Chip size="small" icon={<LockIcon sx={{ fontSize: '11px !important' }} />} label="Restricted Access" color="warning" variant="outlined" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 600 }} />
+                        ) : (
+                          <Chip size="small" icon={<PeopleIcon sx={{ fontSize: '11px !important' }} />} label="Institute Collaboration" color="default" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 600, bgcolor: '#f1f5f9' }} />
+                        )}
+                      </Box>
                     </Box>
                   </Box>
                 </TableCell>
@@ -867,12 +1013,43 @@ export default function RecruiterDashboard() {
                    </Typography>
                 </TableCell>
                 <TableCell>
-                  <Chip 
-                    label={job.isActive ? 'Active' : 'Closed'} 
-                    color={job.isActive ? 'success' : 'default'} 
-                    size="small" 
-                    sx={{ fontWeight: 'bold' }}
-                  />
+                  {job.approvalStatus === 'Pending' ? (
+                    <Tooltip title="This job is currently pending approval by your Institute Administrator before going live.">
+                      <Chip 
+                        label="Pending Approval" 
+                        size="small" 
+                        sx={{ 
+                          fontWeight: 'bold', 
+                          bgcolor: '#fef3c7', 
+                          color: '#92400e', 
+                          border: '1px solid #fde68a' 
+                        }}
+                      />
+                    </Tooltip>
+                  ) : job.approvalStatus === 'Rejected' ? (
+                    <Box>
+                      <Tooltip title={job.approvalComment ? `Rejected by Admin: ${job.approvalComment}` : 'Job was rejected by Institute Administrator. Credits refunded.'}>
+                        <Chip 
+                          label="Rejected" 
+                          size="small" 
+                          color="error"
+                          sx={{ fontWeight: 'bold' }}
+                        />
+                      </Tooltip>
+                      {job.approvalComment && (
+                        <Typography variant="caption" sx={{ display: 'block', color: 'error.main', fontSize: '0.68rem', mt: 0.5, maxWidth: 160 }}>
+                          {job.approvalComment}
+                        </Typography>
+                      )}
+                    </Box>
+                  ) : (
+                    <Chip 
+                      label={job.isActive ? 'Active' : 'Closed'} 
+                      color={job.isActive ? 'success' : 'default'} 
+                      size="small" 
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                  )}
                 </TableCell>
                 <TableCell align="right">
                   <Button 
@@ -1472,6 +1649,24 @@ export default function RecruiterDashboard() {
                     </Box>
                   </TableCell>
                   <TableCell align="right">
+                    {candidate.alreadyUnlockedByInstitution && (
+                      <Chip
+                        size="small"
+                        label="Institute Unlocked"
+                        color="success"
+                        variant="outlined"
+                        sx={{
+                          height: 18,
+                          fontSize: '0.62rem',
+                          fontWeight: 700,
+                          bgcolor: '#f0fdf4',
+                          borderColor: '#86efac',
+                          color: '#166534',
+                          mb: 0.6,
+                          display: 'inline-flex'
+                        }}
+                      />
+                    )}
                     {candidate.hasUnlockedContact ? (
                       <Box sx={{ textAlign: 'left', mb: 0.75, p: 0.5, bgcolor: 'action.hover', borderRadius: 1 }}>
                         <Typography variant="caption" sx={{ display: 'block', fontWeight: 'bold', fontSize: '0.68rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={candidate.email}>{candidate.email}</Typography>
@@ -1481,21 +1676,22 @@ export default function RecruiterDashboard() {
                       <Button 
                         variant="outlined" 
                         size="small" 
-                        onClick={() => handleUnlockContact(candidate.id)}
+                        onClick={() => handleUnlockContact(candidate.id, candidate.alreadyUnlockedByInstitution)}
+                        color={candidate.alreadyUnlockedByInstitution ? "success" : "primary"}
                         sx={{ mb: 0.5, display: 'block', width: '100%', py: 0.25, px: 0.5, fontSize: '0.68rem', textTransform: 'none', fontWeight: 600, minHeight: 24 }}
                       >
-                        Unlock Contact
+                        {candidate.alreadyUnlockedByInstitution ? "Unlock Contact (Free)" : "Unlock Contact"}
                       </Button>
                     )}
                     <Button 
                       variant="outlined" 
-                      color={candidate.hasDownloadedResume ? "success" : "secondary"}
+                      color={candidate.hasDownloadedResume ? "success" : candidate.alreadyUnlockedByInstitution ? "success" : "secondary"}
                       size="small" 
                       startIcon={<DescriptionIcon sx={{ fontSize: '12px !important' }} />}
                       onClick={() => handleDownloadResume(candidate)}
                       sx={{ width: '100%', py: 0.25, px: 0.5, fontSize: '0.68rem', textTransform: 'none', fontWeight: 600, minHeight: 24 }}
                     >
-                      {candidate.hasDownloadedResume ? "View Resume" : "Unlock Resume"}
+                      {candidate.hasDownloadedResume ? "View Resume" : candidate.alreadyUnlockedByInstitution ? "Download Resume (Free)" : "Unlock Resume"}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -1914,12 +2110,12 @@ export default function RecruiterDashboard() {
               <Table size="small" sx={{ tableLayout: 'fixed' }}>
                 <TableHead sx={{ bgcolor: '#f8fafc' }}>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold', width: '23%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>Candidate</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', width: '18%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>AI Recommendation</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', width: '10%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>Experience</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', width: '15%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>Location</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '21%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>Candidate</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '17%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>AI Recommendation</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '9%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>Experience</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '14%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>Location</TableCell>
                     <TableCell sx={{ fontWeight: 'bold', width: '21%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>Skills & Credentials</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 'bold', width: '13%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>Action</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold', width: '18%', py: 1.25, px: { xs: 0.75, sm: 1 }, fontSize: '0.82rem' }}>Action</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -2088,6 +2284,24 @@ export default function RecruiterDashboard() {
                         </Box>
                       </TableCell>
                       <TableCell align="right" sx={{ px: { xs: 0.75, sm: 1 }, py: 1.25 }}>
+                        {candidate.alreadyUnlockedByInstitution && (
+                          <Chip
+                            size="small"
+                            label="Institute Unlocked"
+                            color="success"
+                            variant="outlined"
+                            sx={{
+                              height: 18,
+                              fontSize: '0.62rem',
+                              fontWeight: 700,
+                              bgcolor: '#f0fdf4',
+                              borderColor: '#86efac',
+                              color: '#166534',
+                              mb: 0.6,
+                              display: 'inline-flex'
+                            }}
+                          />
+                        )}
                         {candidate.hasUnlockedContact ? (
                           <Box sx={{ textAlign: 'left', mb: 0.75, p: 0.5, bgcolor: 'action.hover', borderRadius: 1 }}>
                             <Typography variant="caption" sx={{ display: 'block', fontWeight: 'bold', fontSize: '0.68rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={candidate.email}>{candidate.email}</Typography>
@@ -2097,21 +2311,42 @@ export default function RecruiterDashboard() {
                           <Button 
                             variant="outlined" 
                             size="small" 
-                            onClick={() => handleUnlockContact(candidate.id)}
+                            onClick={() => handleUnlockContact(candidate.id, candidate.alreadyUnlockedByInstitution)}
+                            color={candidate.alreadyUnlockedByInstitution ? "success" : "primary"}
                             sx={{ mb: 0.5, display: 'block', width: '100%', py: 0.25, px: 0.5, fontSize: '0.68rem', textTransform: 'none', fontWeight: 600, minHeight: 24 }}
                           >
-                            Unlock Contact
+                            {candidate.alreadyUnlockedByInstitution ? "Unlock Contact (Free)" : "Unlock Contact"}
                           </Button>
                         )}
                         <Button 
                           variant="outlined" 
-                          color={candidate.hasDownloadedResume ? "success" : "secondary"}
+                          color={candidate.hasDownloadedResume ? "success" : candidate.alreadyUnlockedByInstitution ? "success" : "secondary"}
                           size="small" 
                           startIcon={<DescriptionIcon sx={{ fontSize: '12px !important' }} />}
                           onClick={() => handleDownloadResume(candidate)}
-                          sx={{ width: '100%', py: 0.25, px: 0.5, fontSize: '0.68rem', textTransform: 'none', fontWeight: 600, minHeight: 24 }}
+                          sx={{ mb: 0.5, width: '100%', py: 0.25, px: 0.5, fontSize: '0.68rem', textTransform: 'none', fontWeight: 600, minHeight: 24 }}
                         >
-                          {candidate.hasDownloadedResume ? "View Resume" : "Unlock Resume"}
+                          {candidate.hasDownloadedResume ? "View Resume" : candidate.alreadyUnlockedByInstitution ? "Download Resume (Free)" : "Unlock Resume"}
+                        </Button>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={<EmailIcon sx={{ fontSize: '12px !important' }} />}
+                          onClick={() => handleOpenSendJobEmailModal(candidate)}
+                          sx={{ 
+                            width: '100%', 
+                            py: 0.35, 
+                            px: 0.5, 
+                            fontSize: '0.68rem', 
+                            textTransform: 'none', 
+                            fontWeight: 600, 
+                            minHeight: 24,
+                            bgcolor: '#4f46e5',
+                            color: '#ffffff',
+                            '&:hover': { bgcolor: '#3730a3' }
+                          }}
+                        >
+                          Send Job Email
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -2126,6 +2361,234 @@ export default function RecruiterDashboard() {
             Showing {aiMatchedCandidates.length} candidate{aiMatchedCandidates.length === 1 ? '' : 's'} ranked by AI match score
           </Typography>
           <Button onClick={() => setIsAiMatchesModalOpen(false)} variant="outlined" size="small">Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Send Job Email Modal */}
+      <Dialog 
+        open={isSendJobEmailModalOpen} 
+        onClose={() => !isSubmittingJobEmail && setIsSendJobEmailModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ bgcolor: 'rgba(79, 70, 229, 0.1)', p: 1, borderRadius: 2, display: 'flex' }}>
+              <EmailIcon sx={{ color: '#4f46e5', fontSize: 24 }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                Send Job Description via Email
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                To <strong>{selectedCandidateForEmail?.firstName} {selectedCandidateForEmail?.lastName}</strong> for <strong>{selectedJobForMatches?.title}</strong>
+              </Typography>
+            </Box>
+          </Box>
+          <IconButton 
+            onClick={() => setIsSendJobEmailModalOpen(false)} 
+            size="small" 
+            disabled={isSubmittingJobEmail}
+          >
+            <CancelIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ pt: 2, pb: 2 }}>
+          {/* Candidate & Job Highlights */}
+          <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: '#f8fafc', borderRadius: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                  Candidate: {selectedCandidateForEmail?.firstName} {selectedCandidateForEmail?.lastName}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  Email: {emailQuote?.recipientEmail || selectedCandidateForEmail?.email || '***@***.***'} • Phone: {selectedCandidateForEmail?.hasUnlockedContact ? selectedCandidateForEmail.phoneNumber : '******'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Experience: {selectedCandidateForEmail?.totalExperienceYears} Yrs • Location: {selectedCandidateForEmail?.currentLocation || 'N/A'}
+                </Typography>
+              </Box>
+              <Chip 
+                label={`${Math.round(selectedCandidateForEmail?.aiRecommendationScore || 0)}% AI Match`} 
+                size="small" 
+                color="primary" 
+                variant="outlined"
+                sx={{ fontWeight: 700, fontSize: '0.7rem' }}
+              />
+            </Box>
+            <Divider sx={{ my: 1 }} />
+            <Box>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
+                Job Position Details
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#0f172a' }}>
+                {selectedJobForMatches?.title}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {selectedJobForMatches?.location} • {selectedJobForMatches?.jobType} 
+                {selectedJobForMatches?.boardAffiliation ? ` • Board: ${selectedJobForMatches.boardAffiliation}` : ''}
+                {selectedJobForMatches?.subjectDepartment ? ` • ${selectedJobForMatches.subjectDepartment}` : ''}
+              </Typography>
+            </Box>
+          </Paper>
+
+          {/* Credit Cost Breakdown Card */}
+          <Paper 
+            variant="outlined" 
+            sx={{ 
+              p: 2, 
+              mb: 2.5, 
+              borderRadius: 2, 
+              borderColor: emailQuote?.hasSufficientBalance ? '#c7d2fe' : '#fca5a5',
+              bgcolor: emailQuote?.hasSufficientBalance ? '#faf5ff' : '#fef2f2' 
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e1b4b', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <AutoAwesomeIcon sx={{ fontSize: 16, color: '#4f46e5' }} /> Credit Cost Breakdown
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {isLoadingEmailQuote && <CircularProgress size={14} sx={{ color: '#4f46e5' }} />}
+                <Typography variant="caption" sx={{ fontWeight: 600, color: '#64748b' }}>
+                  Configured Rates
+                </Typography>
+              </Box>
+            </Box>
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, fontSize: '0.85rem' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="body2" color="text.secondary">
+                  ✉️ Candidate Email Delivery:
+                </Typography>
+                <Chip 
+                  label={`${emailQuote?.emailCost ?? 3} Credits`} 
+                  size="small" 
+                  sx={{ fontWeight: 700, height: 22, fontSize: '0.72rem', bgcolor: '#e0e7ff', color: '#3730a3' }} 
+                />
+              </Box>
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    🔓 Unlock Contact Details:
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: emailQuote?.isContactUnlocked ? '#16a34a' : '#64748b', fontSize: '0.7rem' }}>
+                    {emailQuote?.isContactUnlocked ? 'Already Unlocked (No Charge)' : 'Locked for this candidate'}
+                  </Typography>
+                </Box>
+                <Chip 
+                  label={emailQuote?.isContactUnlocked ? '0 Credits (Unlocked)' : `+${emailQuote?.contactUnlockCost ?? 2} Credits`} 
+                  size="small" 
+                  color={emailQuote?.isContactUnlocked ? 'success' : 'default'}
+                  variant={emailQuote?.isContactUnlocked ? 'outlined' : 'filled'}
+                  sx={{ fontWeight: 700, height: 22, fontSize: '0.72rem' }} 
+                />
+              </Box>
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    📄 Unlock Resume Access:
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: emailQuote?.isResumeUnlocked ? '#16a34a' : '#64748b', fontSize: '0.7rem' }}>
+                    {emailQuote?.isResumeUnlocked ? 'Already Unlocked (No Charge)' : 'Locked for this candidate'}
+                  </Typography>
+                </Box>
+                <Chip 
+                  label={emailQuote?.isResumeUnlocked ? '0 Credits (Unlocked)' : `+${emailQuote?.resumeUnlockCost ?? 5} Credits`} 
+                  size="small" 
+                  color={emailQuote?.isResumeUnlocked ? 'success' : 'default'}
+                  variant={emailQuote?.isResumeUnlocked ? 'outlined' : 'filled'}
+                  sx={{ fontWeight: 700, height: 22, fontSize: '0.72rem' }} 
+                />
+              </Box>
+
+              <Divider sx={{ my: 0.5 }} />
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, fontSize: '0.95rem' }}>
+                  Total Required Credits:
+                </Typography>
+                <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#4338ca', fontSize: '1.05rem' }}>
+                  {emailQuote?.totalCost ?? 10} Credits
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 0.5 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Your Available Balance: <strong>{creditBalance} Credits</strong>
+                </Typography>
+                <Typography variant="caption" sx={{ color: emailQuote?.hasSufficientBalance ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+                  {emailQuote?.hasSufficientBalance 
+                    ? `Remaining: ${creditBalance - (emailQuote?.totalCost ?? 0)} Credits` 
+                    : `Shortfall: ${(emailQuote?.totalCost ?? 0) - creditBalance} Credits`}
+                </Typography>
+              </Box>
+            </Box>
+          </Paper>
+
+          {/* Alert if insufficient balance */}
+          {!emailQuote?.hasSufficientBalance && (
+            <Alert severity="error" sx={{ mb: 2, fontSize: '0.8rem' }}>
+              You do not have enough credits to send this email and unlock the required candidate details. Please recharge your wallet from the Credits tab.
+            </Alert>
+          )}
+
+          {/* Info note */}
+          {emailQuote?.hasSufficientBalance && (
+            <Alert severity="info" icon={<CheckCircleIcon fontSize="inherit" />} sx={{ mb: 2, fontSize: '0.78rem' }}>
+              Sending this email will deliver the complete Job Description to the candidate and fully unlock their contact info and resume for future reference.
+            </Alert>
+          )}
+
+          {/* Email Customization Fields */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <TextField
+              label="Email Subject"
+              size="small"
+              fullWidth
+              value={customEmailSubject}
+              onChange={(e) => setCustomEmailSubject(e.target.value)}
+              placeholder="Job Opportunity Subject"
+            />
+            <TextField
+              label="Custom Personal Note / Instructions (Optional)"
+              size="small"
+              fullWidth
+              multiline
+              rows={3}
+              value={customEmailMessage}
+              onChange={(e) => setCustomEmailMessage(e.target.value)}
+              placeholder="e.g. We were impressed by your teaching experience in Physics and would love to invite you to discuss this role."
+              helperText="This personal message will be highlighted at the top of the email along with the full Job Description."
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5, justifyContent: 'space-between' }}>
+          <Button 
+            onClick={() => setIsSendJobEmailModalOpen(false)} 
+            disabled={isSubmittingJobEmail}
+            variant="outlined" 
+            size="small"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={isSubmittingJobEmail ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : <SendIcon sx={{ fontSize: 16 }} />}
+            onClick={handleSendJobEmail}
+            disabled={isSubmittingJobEmail || !emailQuote?.hasSufficientBalance}
+            sx={{
+              bgcolor: '#4f46e5',
+              '&:hover': { bgcolor: '#4338ca' },
+              fontWeight: 700,
+              textTransform: 'none',
+              px: 2.5
+            }}
+          >
+            {isSubmittingJobEmail ? 'Sending...' : `Send Email (${emailQuote?.totalCost ?? 10} Credits)`}
+          </Button>
         </DialogActions>
       </Dialog>
 

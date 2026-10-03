@@ -123,6 +123,12 @@ export default function NavBar() {
           {isAuthenticated && isAdmin && (
             <>
               <Button color="inherit" onClick={() => navigate(role === 'InstituteAdministrator' ? '/instituteadmin/dashboard' : '/admin/dashboard')}>Dashboard</Button>
+              {role === 'InstituteAdministrator' && (
+                <>
+                  <Button color="inherit" onClick={() => navigate('/instituteadmin/approvals')}>Approvals</Button>
+                  <Button color="inherit" onClick={() => navigate('/instituteadmin/recruiters')}>Recruiters</Button>
+                </>
+              )}
               <Button color="inherit" onClick={() => navigate('/admin/profile')}>Settings</Button>
             </>
           )}

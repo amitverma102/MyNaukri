@@ -24,19 +24,29 @@ public class JobApplicationCommentController : ControllerBase
     public async Task<ActionResult<IEnumerable<JobApplicationCommentDto>>> GetComments(Guid id)
     {
         var application = await _context.JobApplications
-            .Include(a => a.Job)
+            .Include(a => a.Job).ThenInclude(j => j.AssignedRecruiters)
             .FirstOrDefaultAsync(a => a.Id == id);
 
         if (application == null) return NotFound();
 
-        // Check auth (assuming recruiter owns the job)
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (Guid.TryParse(userIdString, out var userId))
         {
             var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.UserId == userId);
-            if (recruiter != null && application.Job.RecruiterId != recruiter.Id)
+            var adminProfile = await _context.InstituteAdminProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+            var institutionId = recruiter?.InstitutionId ?? adminProfile?.InstitutionId;
+
+            if (institutionId != null && application.Job.InstitutionId != institutionId.Value && !User.IsInRole("SuperAdministrator"))
             {
                 return Forbid();
+            }
+
+            if (recruiter != null && !User.IsInRole("SuperAdministrator") && !User.IsInRole("InstituteAdministrator"))
+            {
+                if (application.Job.IsRestrictedAccess && application.Job.RecruiterId != recruiter.Id && !application.Job.AssignedRecruiters.Any(ar => ar.RecruiterId == recruiter.Id))
+                {
+                    return Forbid();
+                }
             }
         }
 
@@ -62,7 +72,7 @@ public class JobApplicationCommentController : ControllerBase
     public async Task<ActionResult<JobApplicationCommentDto>> AddComment(Guid id, [FromBody] CreateJobApplicationCommentDto dto)
     {
         var application = await _context.JobApplications
-            .Include(a => a.Job)
+            .Include(a => a.Job).ThenInclude(j => j.AssignedRecruiters)
             .FirstOrDefaultAsync(a => a.Id == id);
 
         if (application == null) return NotFound();
@@ -71,9 +81,20 @@ public class JobApplicationCommentController : ControllerBase
         if (!Guid.TryParse(userIdString, out var userId)) return Unauthorized();
 
         var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.UserId == userId);
-        if (recruiter != null && application.Job.RecruiterId != recruiter.Id)
+        var adminProfile = await _context.InstituteAdminProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+        var institutionId = recruiter?.InstitutionId ?? adminProfile?.InstitutionId;
+
+        if (institutionId != null && application.Job.InstitutionId != institutionId.Value && !User.IsInRole("SuperAdministrator"))
         {
             return Forbid();
+        }
+
+        if (recruiter != null && !User.IsInRole("SuperAdministrator") && !User.IsInRole("InstituteAdministrator"))
+        {
+            if (application.Job.IsRestrictedAccess && application.Job.RecruiterId != recruiter.Id && !application.Job.AssignedRecruiters.Any(ar => ar.RecruiterId == recruiter.Id))
+            {
+                return Forbid();
+            }
         }
 
         var comment = new JobApplicationComment

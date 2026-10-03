@@ -27,4 +27,19 @@ public class JobDto
     public string? BoardAffiliation { get; set; }
     public string? SubjectDepartment { get; set; }
     public string? InstitutionLogoUrl { get; set; }
+
+    // Approval flow fields
+    public string ApprovalStatus { get; set; } = "Approved";
+    public string? ApprovalComment { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public string? RecruiterName { get; set; }
+    public string? RecruiterEmail { get; set; }
+    public string? RecruiterDesignation { get; set; }
+
+    // Restriction & Assignment fields
+    public bool IsRestrictedAccess { get; set; }
+    public List<Guid> AssignedRecruiterIds { get; set; } = new();
+    public List<string> AssignedRecruiterNames { get; set; } = new();
+    public bool IsOwner { get; set; }
+    public bool CanManage { get; set; } = true;
 }

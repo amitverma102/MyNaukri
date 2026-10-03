@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyNaukri.Infrastructure.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MyNaukri.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261003051506_AddInstitutionWideContactSharingAndJobAssignments")]
+    partial class AddInstitutionWideContactSharingAndJobAssignments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -813,14 +816,8 @@ namespace MyNaukri.Infrastructure.Migrations
                     b.Property<int?>("InterviewMode")
                         .HasColumnType("integer");
 
-                    b.Property<DateTime?>("InterviewReminderSentAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("InterviewVenue")
                         .HasColumnType("text");
-
-                    b.Property<bool>("IsInterviewReminderSent")
-                        .HasColumnType("boolean");
 
                     b.Property<Guid>("JobId")
                         .HasColumnType("uuid");

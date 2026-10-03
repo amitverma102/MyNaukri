@@ -7,6 +7,9 @@ public class CandidateContactAccess : BaseEntity
     public Guid RecruiterId { get; set; }
     public Recruiter Recruiter { get; set; } = null!;
     
+    public Guid? InstitutionId { get; set; }
+    public Institution? Institution { get; set; }
+    
     public Guid CandidateId { get; set; }
     public Candidate Candidate { get; set; } = null!;
     
