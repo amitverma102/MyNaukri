@@ -174,8 +174,13 @@ export default function CandidateProfile() {
     onSuccess: (data) => {
       setSuccessMsg('Resume uploaded and parsed successfully!');
       const newSkills = data.skills || data.Skills;
-      if (newSkills) {
-        setSkills(prev => prev ? `${prev}, ${newSkills}` : newSkills);
+      if (newSkills && !newSkills.toLowerCase().includes('parsing failed')) {
+        setSkills(prev => {
+          if (!prev || prev.toLowerCase().includes('parsing failed')) return newSkills;
+          const existing = prev.split(',').map((s: string) => s.trim().toLowerCase());
+          const toAdd = newSkills.split(',').map((s: string) => s.trim()).filter((s: string) => s && !existing.includes(s.toLowerCase()));
+          return toAdd.length > 0 ? `${prev}, ${toAdd.join(', ')}` : prev;
+        });
       }
       const newUrl = data.resumeUrl || data.ResumeUrl;
       if (newUrl) {
@@ -183,22 +188,22 @@ export default function CandidateProfile() {
       }
       const newPhone = data.phoneNumber || data.PhoneNumber;
       if (newPhone) {
-        setPhoneNumber(prev => prev || newPhone);
+        setPhoneNumber(newPhone);
       }
       const newExp = data.totalExperienceYears ?? data.TotalExperienceYears;
-      if (newExp !== undefined && newExp !== null) {
-        setExperience(prev => prev || newExp);
+      if (newExp !== undefined && newExp !== null && newExp > 0) {
+        setExperience(newExp);
       }
       const newLoc = data.currentLocation || data.CurrentLocation;
-      if (newLoc) setCurrentLocation(prev => prev || newLoc);
+      if (newLoc) setCurrentLocation(newLoc);
       const newClasses = data.classesTaught || data.ClassesTaught;
-      if (newClasses) setClassesTaught(prev => prev || newClasses);
+      if (newClasses) setClassesTaught(newClasses);
       const newBoards = data.boardsTaught || data.BoardsTaught;
-      if (newBoards) setBoardsTaught(prev => prev || newBoards);
+      if (newBoards) setBoardsTaught(newBoards);
       const newEdu = data.education || data.Education;
-      if (newEdu) setEducation(prev => prev || newEdu);
+      if (newEdu) setEducation(newEdu);
       const newCerts = data.certifications || data.Certifications;
-      if (newCerts) setCertifications(prev => prev || newCerts);
+      if (newCerts) setCertifications(newCerts);
       queryClient.invalidateQueries({ queryKey: ['profile'] });
     }
   });

@@ -339,14 +339,28 @@ public class CandidatesController : ControllerBase
         
         // Update candidate record
         candidate.ResumeUrl = fileUrl;
-        candidate.Skills = string.IsNullOrEmpty(candidate.Skills) ? parsedData.Skills : candidate.Skills;
-        candidate.PhoneNumber = string.IsNullOrEmpty(candidate.PhoneNumber) ? parsedData.PhoneNumber : candidate.PhoneNumber;
-        candidate.TotalExperienceYears = candidate.TotalExperienceYears == 0 ? parsedData.TotalExperienceYears : candidate.TotalExperienceYears;
-        candidate.CurrentLocation = string.IsNullOrEmpty(candidate.CurrentLocation) ? parsedData.CurrentLocation : candidate.CurrentLocation;
-        candidate.ClassesTaught = string.IsNullOrEmpty(candidate.ClassesTaught) ? parsedData.ClassesTaught : candidate.ClassesTaught;
-        candidate.BoardsTaught = string.IsNullOrEmpty(candidate.BoardsTaught) ? parsedData.BoardsTaught : candidate.BoardsTaught;
-        candidate.Education = string.IsNullOrEmpty(candidate.Education) ? parsedData.Education : candidate.Education;
-        candidate.Certifications = string.IsNullOrEmpty(candidate.Certifications) ? parsedData.Certifications : candidate.Certifications;
+        if (!string.IsNullOrWhiteSpace(parsedData.Skills) && !parsedData.Skills.Equals("Parsing Failed", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(candidate.Skills) || candidate.Skills.Contains("Parsing Failed", StringComparison.OrdinalIgnoreCase))
+            {
+                candidate.Skills = parsedData.Skills;
+            }
+            else
+            {
+                var existing = candidate.Skills.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+                var toAdd = parsedData.Skills.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+                var merged = existing.Union(toAdd, StringComparer.OrdinalIgnoreCase).ToList();
+                candidate.Skills = string.Join(", ", merged);
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(parsedData.PhoneNumber)) candidate.PhoneNumber = parsedData.PhoneNumber;
+        if (parsedData.TotalExperienceYears > 0) candidate.TotalExperienceYears = parsedData.TotalExperienceYears;
+        if (!string.IsNullOrWhiteSpace(parsedData.CurrentLocation)) candidate.CurrentLocation = parsedData.CurrentLocation;
+        if (!string.IsNullOrWhiteSpace(parsedData.ClassesTaught)) candidate.ClassesTaught = parsedData.ClassesTaught;
+        if (!string.IsNullOrWhiteSpace(parsedData.BoardsTaught)) candidate.BoardsTaught = parsedData.BoardsTaught;
+        if (!string.IsNullOrWhiteSpace(parsedData.Education)) candidate.Education = parsedData.Education;
+        if (!string.IsNullOrWhiteSpace(parsedData.Certifications)) candidate.Certifications = parsedData.Certifications;
+        candidate.ProfileLastParsedAt = DateTime.UtcNow;
         candidate.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();

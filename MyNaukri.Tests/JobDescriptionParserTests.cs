@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -180,4 +182,95 @@ Strong classroom management and curriculum planning skills.";
         Assert.Equal("Mathematics Teacher", parsedDto.Title);
         Assert.Equal("CBSE", parsedDto.BoardAffiliation);
     }
+
+    [Fact]
+    public async Task DbAiService_TestLiveGeminiParseResume()
+    {
+        using var context = CreateInMemoryDbContext();
+        var mockConfig = new Mock<IConfiguration>();
+        var apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        mockConfig.Setup(c => c["Gemini:ApiKey"]).Returns(apiKey);
+
+        var mockLogger = new Mock<ILogger<DbAiService>>();
+        var aiService = new DbAiService(context, mockConfig.Object, mockLogger.Object);
+
+        var resumeText = "John Doe, Mathematics Teacher, 5 years experience, CBSE, 10th and 12th grades, B.Ed, M.Sc in Mathematics, Phone: +91 9876543210, Skills: Calculus, Algebra, Classroom Management, Bengaluru";
+        var resumeBytes = Encoding.UTF8.GetBytes(resumeText);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var result = await aiService.ParseResumeAsync(resumeBytes, "resume.txt");
+        sw.Stop();
+
+        Console.WriteLine($"PARSED RESUME in {sw.ElapsedMilliseconds}ms: Skills={result.Skills}, Phone={result.PhoneNumber}, Exp={result.TotalExperienceYears}, Edu={result.Education}, Loc={result.CurrentLocation}");
+        Assert.NotNull(result);
+        Assert.False(string.IsNullOrWhiteSpace(result.Skills));
+        Assert.NotEqual("Parsing Failed", result.Skills);
+        Assert.Contains("9876543210", result.PhoneNumber);
+        Assert.Equal(5, result.TotalExperienceYears);
+    }
+
+    [Fact]
+    public async Task DbAiService_ParseResumeAsync_FallbackHeuristic_WhenNoApiKey()
+    {
+        using var context = CreateInMemoryDbContext();
+        var mockConfig = new Mock<IConfiguration>();
+        mockConfig.Setup(c => c["Gemini:ApiKey"]).Returns((string?)null);
+
+        var mockLogger = new Mock<ILogger<DbAiService>>();
+        var aiService = new DbAiService(context, mockConfig.Object, mockLogger.Object);
+
+        var resumeText = "Priya Sharma, Science Teacher, 4 years experience, ICSE, Primary classes, B.Ed, Phone: 9811122233, Skills: Physics, Chemistry, Lesson Planning, Mumbai";
+        var resumeBytes = Encoding.UTF8.GetBytes(resumeText);
+
+        var result = await aiService.ParseResumeAsync(resumeBytes, "priya_resume.txt");
+
+        Assert.NotNull(result);
+        Assert.NotEqual("Parsing Failed", result.Skills);
+        Assert.Contains("Physics", result.Skills);
+        Assert.Equal(4, result.TotalExperienceYears);
+        Assert.Equal("9811122233", result.PhoneNumber);
+        Assert.Equal("Mumbai", result.CurrentLocation);
+    }
+
+    [Fact]
+    public async Task DbAiService_ParseResumeAsync_DocxFormat_ParsesSuccessfully()
+    {
+        using var context = CreateInMemoryDbContext();
+        var mockConfig = new Mock<IConfiguration>();
+        var apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        mockConfig.Setup(c => c["Gemini:ApiKey"]).Returns(apiKey);
+
+        var mockLogger = new Mock<ILogger<DbAiService>>();
+        var aiService = new DbAiService(context, mockConfig.Object, mockLogger.Object);
+
+        using var ms = new MemoryStream();
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, true))
+        {
+            var entry = archive.CreateEntry("word/document.xml");
+            using var entryStream = entry.Open();
+            using var writer = new StreamWriter(entryStream, Encoding.UTF8);
+            var xmlContent = @"<?xml version=""1.0"" encoding=""UTF-8"" standalone=""yes""?>
+<w:document xmlns:w=""http://schemas.openxmlformats.org/wordprocessingml/2006/main"">
+  <w:body>
+    <w:p><w:r><w:t>Rohan Gupta, PGT Chemistry Teacher</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Phone: +91 9822334455, Email: rohan.gupta@example.com</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Location: Mumbai. 6 years experience in teaching CBSE 11th and 12th grades.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Education: M.Sc Chemistry, B.Ed. Skills: Organic Chemistry, Classroom Management, Laboratory Safety</w:t></w:r></w:p>
+  </w:body>
+</w:document>";
+            writer.Write(xmlContent);
+        }
+
+        var docxBytes = ms.ToArray();
+        var result = await aiService.ParseResumeAsync(docxBytes, "Rohan_Resume.docx");
+
+        Assert.NotNull(result);
+        Assert.NotEqual("Parsing Failed", result.Skills);
+        Assert.Contains("Chemistry", result.Skills);
+        Assert.Equal(6, result.TotalExperienceYears);
+        Assert.Contains("9822334455", result.PhoneNumber);
+    }
 }
+
+
+

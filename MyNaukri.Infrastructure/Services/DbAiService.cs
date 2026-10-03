@@ -38,36 +38,17 @@ public class DbAiService : IAiService
 
     public async Task<ParsedResumeDto> ParseResumeAsync(byte[] resumeData, string fileName)
     {
-        string text = "";
-        try
+        var text = DocumentTextExtractor.ExtractText(resumeData, fileName, _logger);
+        if (string.IsNullOrWhiteSpace(text))
         {
-            if (fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
-            {
-                using var document = PdfDocument.Open(resumeData);
-                foreach (var page in document.GetPages())
-                {
-                    text += page.Text + " ";
-                }
-            }
-            else
-            {
-                text = "File is not a PDF.";
-            }
-        }
-        catch (Exception)
-        {
-            text = "Failed to parse document text.";
+            _logger.LogWarning("No readable text could be extracted from resume file {FileName}. Using fallback parser.", fileName);
+            return DocumentTextExtractor.ExtractFallbackResume(string.Empty, fileName);
         }
 
         var apiKey = _config["Gemini:ApiKey"];
         if (string.IsNullOrEmpty(apiKey) || apiKey == "YOUR_GEMINI_API_KEY_HERE")
         {
-            return new ParsedResumeDto 
-            {
-                Skills = "C#, .NET (Mock - No API Key)",
-                PhoneNumber = "+91 0000000000",
-                TotalExperienceYears = 0
-            };
+            return DocumentTextExtractor.ExtractFallbackResume(text, fileName);
         }
 
         var prompt = $@"
@@ -96,8 +77,13 @@ Respond ONLY with a valid JSON object matching this schema exactly, and nothing 
 Resume Text:
 {text}";
 
-        var modelName = _config["Gemini:ModelName"] ?? "gemini-3.5-flash";
         var method = _config["Gemini:Method"] ?? "generateContent";
+        var configuredModel = _config["Gemini:ModelName"];
+
+        var modelsToTry = new List<string>();
+        if (!string.IsNullOrWhiteSpace(configuredModel)) modelsToTry.Add(configuredModel);
+        modelsToTry.AddRange(new[] { "gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-3.5-flash" });
+        modelsToTry = modelsToTry.Distinct().ToList();
 
         var requestBody = new
         {
@@ -118,53 +104,48 @@ Resume Text:
             }
         };
 
-        var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"https://generativelanguage.googleapis.com/v1beta/models/{modelName}:{method}?key={apiKey}")
+        foreach (var modelName in modelsToTry)
         {
-            Content = JsonContent.Create(requestBody)
-        };
-        requestMessage.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-        try
-        {
-            using var responseMessage = await _httpClient.SendAsync(requestMessage);
-            var responseBody = await responseMessage.Content.ReadAsStringAsync();
-
-            if (!responseMessage.IsSuccessStatusCode)
+            try
             {
-                _logger.LogWarning("Resume parse GenAI call failed with status {StatusCode}: {ResponseBody}", responseMessage.StatusCode, responseBody);
-                return GetFallbackParseResult();
-            }
+                using var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"https://generativelanguage.googleapis.com/v1beta/models/{modelName}:{method}?key={apiKey}")
+                {
+                    Content = JsonContent.Create(requestBody)
+                };
+                requestMessage.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-            var result = TryParseGenAiResponse(responseBody);
-            if (result != null)
+                using var responseMessage = await _httpClient.SendAsync(requestMessage);
+                var responseBody = await responseMessage.Content.ReadAsStringAsync();
+
+                if (!responseMessage.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Resume parse GenAI call for model {Model} failed with status {StatusCode}: {ResponseBody}", modelName, responseMessage.StatusCode, responseBody);
+                    continue;
+                }
+
+                var result = TryParseGenAiResponse(responseBody);
+                if (result != null && (!string.IsNullOrWhiteSpace(result.Skills) || !string.IsNullOrWhiteSpace(result.PhoneNumber) || result.TotalExperienceYears > 0 || !string.IsNullOrWhiteSpace(result.Education)))
+                {
+                    return result;
+                }
+
+                _logger.LogWarning("Resume parse GenAI model {Model} response could not be deserialized: {ResponseBody}", modelName, responseBody);
+            }
+            catch (Exception ex)
             {
-                return result;
+                _logger.LogWarning(ex, "Exception while calling GenAI resume parser with model {Model}", modelName);
             }
-
-            _logger.LogWarning("Resume parse GenAI response could not be deserialized from response body: {ResponseBody}", responseBody);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception while calling GenAI resume parser");
         }
 
-        return GetFallbackParseResult();
+        _logger.LogInformation("Falling back to deterministic heuristic parser for resume {FileName}", fileName);
+        return DocumentTextExtractor.ExtractFallbackResume(text, fileName);
     }
 
-    private ParsedResumeDto GetFallbackParseResult()
+    private ParsedResumeDto GetFallbackParseResult(string text = "", string fileName = "")
     {
-        return new ParsedResumeDto
-        {
-            Skills = "Parsing Failed",
-            PhoneNumber = string.Empty,
-            TotalExperienceYears = 0,
-            CurrentLocation = string.Empty,
-            ClassesTaught = string.Empty,
-            BoardsTaught = string.Empty,
-            Education = string.Empty,
-            Certifications = string.Empty
-        };
+        return DocumentTextExtractor.ExtractFallbackResume(text, fileName);
     }
+
 
     private ParsedResumeDto? TryParseGenAiResponse(string jsonResponse)
     {
@@ -203,42 +184,69 @@ Resume Text:
         var candidate = candidates[0];
         if (candidate.TryGetProperty("content", out var content))
         {
-            if (content.ValueKind == JsonValueKind.Array)
+            if (content.ValueKind == JsonValueKind.Object)
             {
-                foreach (var item in content.EnumerateArray())
+                if (content.TryGetProperty("parts", out var parts) && parts.ValueKind == JsonValueKind.Array)
                 {
-                    if (item.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String)
+                    // First pass: find non-thought text part
+                    foreach (var part in parts.EnumerateArray())
                     {
-                        return textProp.GetString();
+                        if (part.TryGetProperty("thought", out var isThought) && isThought.ValueKind == JsonValueKind.True)
+                        {
+                            continue;
+                        }
+                        if (part.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String)
+                        {
+                            var t = textProp.GetString();
+                            if (!string.IsNullOrWhiteSpace(t)) return t;
+                        }
                     }
 
-                    if (item.TryGetProperty("parts", out var parts) && parts.ValueKind == JsonValueKind.Array && parts.GetArrayLength() > 0)
+                    // Fallback pass: any text part
+                    foreach (var part in parts.EnumerateArray())
                     {
-                        var part = parts[0];
-                        if (part.TryGetProperty("text", out var partText) && partText.ValueKind == JsonValueKind.String)
+                        if (part.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String)
                         {
-                            return partText.GetString();
+                            var t = textProp.GetString();
+                            if (!string.IsNullOrWhiteSpace(t)) return t;
                         }
                     }
                 }
-            }
-            else if (content.ValueKind == JsonValueKind.Object)
-            {
-                if (content.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String)
-                {
-                    return textProp.GetString();
-                }
 
-                if (content.TryGetProperty("parts", out var parts) && parts.ValueKind == JsonValueKind.Array && parts.GetArrayLength() > 0)
+                if (content.TryGetProperty("text", out var textPropObj) && textPropObj.ValueKind == JsonValueKind.String)
                 {
-                    var part = parts[0];
-                    if (part.TryGetProperty("text", out var partText) && partText.ValueKind == JsonValueKind.String)
+                    return textPropObj.GetString();
+                }
+            }
+            else if (content.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in content.EnumerateArray())
+                {
+                    if (item.TryGetProperty("parts", out var parts) && parts.ValueKind == JsonValueKind.Array)
                     {
-                        return partText.GetString();
+                        foreach (var part in parts.EnumerateArray())
+                        {
+                            if (part.TryGetProperty("thought", out var isThought) && isThought.ValueKind == JsonValueKind.True)
+                            {
+                                continue;
+                            }
+                            if (part.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String)
+                            {
+                                var t = textProp.GetString();
+                                if (!string.IsNullOrWhiteSpace(t)) return t;
+                            }
+                        }
                     }
+
+                    if (item.TryGetProperty("text", out var textPropItem) && textPropItem.ValueKind == JsonValueKind.String)
+                    {
+                        return textPropItem.GetString();
+                    }
+
                 }
             }
         }
+
 
         if (candidate.TryGetProperty("output", out var output) && output.ValueKind == JsonValueKind.Array && output.GetArrayLength() > 0)
         {
@@ -594,8 +602,13 @@ Generate tailored resume assets. Respond ONLY with a valid JSON object matching 
             return null;
         }
 
-        var modelName = _config["Gemini:ModelName"] ?? "gemini-3.5-flash";
         var method = _config["Gemini:Method"] ?? "generateContent";
+        var configuredModel = _config["Gemini:ModelName"];
+
+        var modelsToTry = new List<string>();
+        if (!string.IsNullOrWhiteSpace(configuredModel)) modelsToTry.Add(configuredModel);
+        modelsToTry.AddRange(new[] { "gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-3.5-flash" });
+        modelsToTry = modelsToTry.Distinct().ToList();
 
         var requestBody = new
         {
@@ -616,39 +629,45 @@ Generate tailored resume assets. Respond ONLY with a valid JSON object matching 
             }
         };
 
-        var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"https://generativelanguage.googleapis.com/v1beta/models/{modelName}:{method}?key={apiKey}")
+        foreach (var modelName in modelsToTry)
         {
-            Content = JsonContent.Create(requestBody)
-        };
-        requestMessage.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-        try
-        {
-            using var responseMessage = await _httpClient.SendAsync(requestMessage);
-            var responseBody = await responseMessage.Content.ReadAsStringAsync();
-
-            if (!responseMessage.IsSuccessStatusCode)
+            try
             {
-                _logger.LogWarning("Gemini API call failed with status {StatusCode}: {ResponseBody}", responseMessage.StatusCode, responseBody);
-                return null;
+                var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"https://generativelanguage.googleapis.com/v1beta/models/{modelName}:{method}?key={apiKey}")
+                {
+                    Content = JsonContent.Create(requestBody)
+                };
+                requestMessage.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                using var responseMessage = await _httpClient.SendAsync(requestMessage);
+                var responseBody = await responseMessage.Content.ReadAsStringAsync();
+
+                if (!responseMessage.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Gemini API call with model {Model} failed with status {StatusCode}: {ResponseBody}", modelName, responseMessage.StatusCode, responseBody);
+                    continue;
+                }
+
+                using var doc = JsonDocument.Parse(responseBody);
+                var textResult = ExtractTextFromGenAiResponse(doc.RootElement);
+                if (string.IsNullOrWhiteSpace(textResult)) continue;
+
+                var jsonBody = ExtractJsonBody(textResult);
+                if (string.IsNullOrWhiteSpace(jsonBody)) continue;
+
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var result = JsonSerializer.Deserialize<T>(jsonBody, options);
+                if (result != null) return result;
             }
-
-            using var doc = JsonDocument.Parse(responseBody);
-            var textResult = ExtractTextFromGenAiResponse(doc.RootElement);
-            if (string.IsNullOrWhiteSpace(textResult)) return null;
-
-            var jsonBody = ExtractJsonBody(textResult);
-            if (string.IsNullOrWhiteSpace(jsonBody)) return null;
-
-            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            return JsonSerializer.Deserialize<T>(jsonBody, options);
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Exception calling or deserializing Gemini response with model {Model}", modelName);
+            }
         }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Exception calling or deserializing Gemini response");
-            return null;
-        }
+
+        return null;
     }
+
 
     private JobResumeComparisonDto GenerateFallbackComparison(Candidate candidate, Job job)
     {
@@ -838,65 +857,9 @@ Respond ONLY with a valid JSON object matching this schema exactly:
 
     private string ExtractTextFromDocument(byte[] fileData, string fileName)
     {
-        var ext = Path.GetExtension(fileName).ToLowerInvariant();
-        try
-        {
-            if (ext == ".pdf")
-            {
-                using var document = PdfDocument.Open(fileData);
-                var sb = new StringBuilder();
-                foreach (var page in document.GetPages())
-                {
-                    sb.AppendLine(page.Text);
-                }
-                return sb.ToString();
-            }
-            else if (ext == ".docx")
-            {
-                using var ms = new MemoryStream(fileData);
-                using var archive = new ZipArchive(ms, ZipArchiveMode.Read);
-                var docEntry = archive.GetEntry("word/document.xml");
-                if (docEntry != null)
-                {
-                    using var stream = docEntry.Open();
-                    var xdoc = XDocument.Load(stream);
-                    XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-                    var paragraphs = xdoc.Descendants(w + "p");
-                    var sb = new StringBuilder();
-                    foreach (var p in paragraphs)
-                    {
-                        var text = string.Concat(p.Descendants(w + "t").Select(t => t.Value));
-                        if (!string.IsNullOrWhiteSpace(text))
-                        {
-                            sb.AppendLine(text);
-                        }
-                    }
-                    return sb.ToString();
-                }
-            }
-            else if (ext == ".txt")
-            {
-                return Encoding.UTF8.GetString(fileData);
-            }
-            else if (ext == ".doc")
-            {
-                var rawText = Encoding.ASCII.GetString(fileData);
-                var matches = Regex.Matches(rawText, @"[\t\r\n\x20-\x7E]{4,}");
-                var sb = new StringBuilder();
-                foreach (Match m in matches)
-                {
-                    sb.AppendLine(m.Value);
-                }
-                return sb.ToString();
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to extract text from document {FileName}", fileName);
-        }
-
-        return string.Empty;
+        return DocumentTextExtractor.ExtractText(fileData, fileName, _logger);
     }
+
 
     private ParsedJobDescriptionDto GetFallbackParsedJobDescription(string text, string fileName)
     {

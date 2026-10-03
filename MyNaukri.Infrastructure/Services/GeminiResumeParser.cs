@@ -22,42 +22,17 @@ public class GeminiResumeParser : IResumeParser
 
     public async Task<ParsedResumeDto> ParseAsync(byte[] fileData, string fileName)
     {
-        string text = "";
-        try
+        var text = DocumentTextExtractor.ExtractText(fileData, fileName, _logger);
+        if (string.IsNullOrWhiteSpace(text))
         {
-            if (fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
-            {
-                using var document = PdfDocument.Open(fileData);
-                foreach (var page in document.GetPages())
-                {
-                    text += page.Text + " ";
-                }
-            }
-            else
-            {
-                // For DOC/DOCX, in a real scenario we'd use a library like DocumentFormat.OpenXml.
-                // For this implementation, we will fall back to minimal mock or just pass bytes.
-                text = "Extracted text for DOC/DOCX is currently mocked. Filename: " + fileName;
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to parse document text for {FileName}", fileName);
-            throw new Exception("Failed to extract text from document", ex);
+            _logger.LogWarning("No readable text could be extracted from resume file {FileName}. Using fallback parser.", fileName);
+            return DocumentTextExtractor.ExtractFallbackResume(string.Empty, fileName);
         }
 
         var apiKey = _config["Gemini:ApiKey"];
         if (string.IsNullOrEmpty(apiKey) || apiKey == "YOUR_GEMINI_API_KEY_HERE")
         {
-            return new ParsedResumeDto 
-            {
-                FirstName = "Mock",
-                LastName = "User",
-                Email = "mock@example.com",
-                Skills = "C#, .NET (Mock - No API Key)",
-                PhoneNumber = "+91 0000000000",
-                TotalExperienceYears = 0
-            };
+            return DocumentTextExtractor.ExtractFallbackResume(text, fileName);
         }
 
         var prompt = $@"
@@ -92,8 +67,13 @@ Respond ONLY with a valid JSON object matching this schema exactly, and nothing 
 Resume Text:
 {text}";
 
-        var modelName = _config["Gemini:ModelName"] ?? "gemini-3.5-flash";
         var method = _config["Gemini:Method"] ?? "generateContent";
+        var configuredModel = _config["Gemini:ModelName"];
+
+        var modelsToTry = new List<string>();
+        if (!string.IsNullOrWhiteSpace(configuredModel)) modelsToTry.Add(configuredModel);
+        modelsToTry.AddRange(new[] { "gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-3.5-flash" });
+        modelsToTry = modelsToTry.Distinct().ToList();
 
         var requestBody = new
         {
@@ -106,54 +86,94 @@ Resume Text:
             },
             generationConfig = new
             {
-                response_mime_type = "application/json"
+                temperature = 0.1,
+                maxOutputTokens = 8192
             }
         };
 
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{modelName}:{method}?key={apiKey}";
-
-        try
+        foreach (var modelName in modelsToTry)
         {
-            var response = await _httpClient.PostAsJsonAsync(url, requestBody);
-            response.EnsureSuccessStatusCode();
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/{modelName}:{method}?key={apiKey}";
 
-            var responseJson = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-            
-            var candidates = responseJson.GetProperty("candidates");
-            if (candidates.GetArrayLength() > 0)
+            try
             {
-                var firstCandidate = candidates[0];
-                var parts = firstCandidate.GetProperty("content").GetProperty("parts");
-                if (parts.GetArrayLength() > 0)
+                var response = await _httpClient.PostAsJsonAsync(url, requestBody);
+                if (!response.IsSuccessStatusCode)
                 {
-                    var textResponse = parts[0].GetProperty("text").GetString();
-                    if (!string.IsNullOrEmpty(textResponse))
+                    var errorBody = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("Gemini API call failed for model {Model} with status {StatusCode}: {ResponseBody}", modelName, response.StatusCode, errorBody);
+                    continue;
+                }
+
+                var responseJson = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+                if (responseJson.TryGetProperty("candidates", out var candidates) && candidates.ValueKind == System.Text.Json.JsonValueKind.Array && candidates.GetArrayLength() > 0)
+                {
+                    var firstCandidate = candidates[0];
+                    if (firstCandidate.TryGetProperty("content", out var content) && content.TryGetProperty("parts", out var parts) && parts.ValueKind == System.Text.Json.JsonValueKind.Array)
                     {
-                        var cleanJson = textResponse.Trim();
-                        if (cleanJson.StartsWith("```json"))
+                        string? textResponse = null;
+                        foreach (var part in parts.EnumerateArray())
                         {
-                            cleanJson = cleanJson.Substring(7);
-                            if (cleanJson.EndsWith("```"))
+                            if (part.TryGetProperty("thought", out var isThought) && isThought.ValueKind == System.Text.Json.JsonValueKind.True)
                             {
-                                cleanJson = cleanJson.Substring(0, cleanJson.Length - 3);
+                                continue;
+                            }
+                            if (part.TryGetProperty("text", out var textProp) && textProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                            {
+                                var t = textProp.GetString();
+                                if (!string.IsNullOrWhiteSpace(t))
+                                {
+                                    textResponse = t;
+                                    break;
+                                }
                             }
                         }
 
-                        var result = System.Text.Json.JsonSerializer.Deserialize<ParsedResumeDto>(cleanJson, new System.Text.Json.JsonSerializerOptions 
+                        if (!string.IsNullOrEmpty(textResponse))
                         {
-                            PropertyNameCaseInsensitive = true 
-                        });
+                            var cleanJson = textResponse.Trim();
+                            if (cleanJson.StartsWith("```json", StringComparison.OrdinalIgnoreCase))
+                            {
+                                cleanJson = cleanJson.Substring(7);
+                            }
+                            else if (cleanJson.StartsWith("```", StringComparison.OrdinalIgnoreCase))
+                            {
+                                cleanJson = cleanJson.Substring(3);
+                            }
 
-                        if (result != null) return result;
+                            if (cleanJson.EndsWith("```", StringComparison.OrdinalIgnoreCase))
+                            {
+                                cleanJson = cleanJson.Substring(0, cleanJson.Length - 3);
+                            }
+
+                            var start = cleanJson.IndexOf('{');
+                            var end = cleanJson.LastIndexOf('}');
+                            if (start >= 0 && end > start)
+                            {
+                                cleanJson = cleanJson.Substring(start, end - start + 1);
+                            }
+
+                            var result = System.Text.Json.JsonSerializer.Deserialize<ParsedResumeDto>(cleanJson, new System.Text.Json.JsonSerializerOptions 
+                            {
+                                PropertyNameCaseInsensitive = true 
+                            });
+
+                            if (result != null && (!string.IsNullOrWhiteSpace(result.Email) || !string.IsNullOrWhiteSpace(result.Skills) || !string.IsNullOrWhiteSpace(result.PhoneNumber)))
+                            {
+                                return result;
+                            }
+                        }
                     }
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to call Gemini API");
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to call Gemini API with model {Model}", modelName);
+            }
         }
 
-        throw new Exception("Failed to parse resume via Gemini API");
+        _logger.LogInformation("Falling back to deterministic heuristic resume extractor for {FileName}", fileName);
+        return DocumentTextExtractor.ExtractFallbackResume(text, fileName);
     }
 }
+
