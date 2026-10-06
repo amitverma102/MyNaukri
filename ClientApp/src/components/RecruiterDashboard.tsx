@@ -133,6 +133,7 @@ interface Candidate {
   summary: string;
   totalExperienceYears: number;
   currentLocation: string;
+  address?: string;
   classesTaught: string;
   boardsTaught: string;
   education: string;
@@ -1388,8 +1389,8 @@ export default function RecruiterDashboard() {
             onKeyPress={(e) => e.key === 'Enter' && handleResdexSearch()}
           />
           <TextField 
-            sx={{ flex: '1 1 150px', bgcolor: '#fff', borderRadius: 1 }}
-            placeholder="Location" 
+            sx={{ flex: '1 1 180px', bgcolor: '#fff', borderRadius: 1 }}
+            placeholder="Location (e.g. Dwarka, Rohini)" 
             variant="outlined" 
             value={resdexLocation}
             onChange={(e) => setResdexLocation(e.target.value)}
@@ -1581,7 +1582,7 @@ export default function RecruiterDashboard() {
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" sx={{ fontSize: '0.8rem', lineHeight: 1.25, wordBreak: 'break-word' }}>
-                      {candidate.currentLocation || 'N/A'}
+                      {candidate.address ? `${candidate.address}${candidate.currentLocation && !candidate.address.toLowerCase().includes(candidate.currentLocation.toLowerCase()) ? ` (${candidate.currentLocation})` : ''}` : (candidate.currentLocation || 'N/A')}
                     </Typography>
                   </TableCell>
                   <TableCell>

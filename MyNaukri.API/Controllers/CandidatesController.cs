@@ -67,6 +67,7 @@ public class CandidatesController : ControllerBase
                 ExpectedSalary = null,
                 NoticePeriod = "",
                 CurrentLocation = "",
+                Address = "",
                 PreferredLocations = "",
                 ClassesTaught = "",
                 BoardsTaught = "",
@@ -92,6 +93,7 @@ public class CandidatesController : ControllerBase
             ExpectedSalary = candidate.ExpectedSalary,
             NoticePeriod = candidate.NoticePeriod,
             CurrentLocation = candidate.CurrentLocation,
+            Address = candidate.Address,
             PreferredLocations = candidate.PreferredLocations,
             ClassesTaught = candidate.ClassesTaught,
             BoardsTaught = candidate.BoardsTaught,
@@ -175,6 +177,7 @@ public class CandidatesController : ControllerBase
             candidate.ExpectedSalary = request.ExpectedSalary ?? candidate.ExpectedSalary;
             candidate.NoticePeriod = request.NoticePeriod ?? candidate.NoticePeriod;
             candidate.CurrentLocation = request.CurrentLocation ?? candidate.CurrentLocation;
+            candidate.Address = request.Address ?? candidate.Address;
             candidate.PreferredLocations = request.PreferredLocations ?? candidate.PreferredLocations;
             candidate.ClassesTaught = request.ClassesTaught ?? candidate.ClassesTaught;
             candidate.BoardsTaught = request.BoardsTaught ?? candidate.BoardsTaught;
@@ -356,6 +359,7 @@ public class CandidatesController : ControllerBase
         if (!string.IsNullOrWhiteSpace(parsedData.PhoneNumber)) candidate.PhoneNumber = parsedData.PhoneNumber;
         if (parsedData.TotalExperienceYears > 0) candidate.TotalExperienceYears = parsedData.TotalExperienceYears;
         if (!string.IsNullOrWhiteSpace(parsedData.CurrentLocation)) candidate.CurrentLocation = parsedData.CurrentLocation;
+        if (!string.IsNullOrWhiteSpace(parsedData.Address)) candidate.Address = parsedData.Address;
         if (!string.IsNullOrWhiteSpace(parsedData.ClassesTaught)) candidate.ClassesTaught = parsedData.ClassesTaught;
         if (!string.IsNullOrWhiteSpace(parsedData.BoardsTaught)) candidate.BoardsTaught = parsedData.BoardsTaught;
         if (!string.IsNullOrWhiteSpace(parsedData.Education)) candidate.Education = parsedData.Education;
@@ -370,7 +374,8 @@ public class CandidatesController : ControllerBase
             Skills = parsedData.Skills, 
             PhoneNumber = parsedData.PhoneNumber,
             TotalExperienceYears = parsedData.TotalExperienceYears,
-            CurrentLocation = parsedData.CurrentLocation,
+            CurrentLocation = candidate.CurrentLocation,
+            Address = candidate.Address,
             ClassesTaught = parsedData.ClassesTaught,
             BoardsTaught = parsedData.BoardsTaught,
             Education = parsedData.Education,

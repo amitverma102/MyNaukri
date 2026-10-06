@@ -99,7 +99,7 @@ export const RecruiterCandidateSearchScreen = () => {
         <View style={{ flex: 1 }}>
           <Text style={styles.candidateName}>{item.name || item.Name || `Candidate #${item.id.substring(0, 6)}`}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
-            <Text style={styles.candidateLocation}>📍 {item.currentLocation || item.CurrentLocation || 'Location Unspecified'}</Text>
+            <Text style={styles.candidateLocation}>📍 {item.address ? `${item.address}${item.currentLocation && !item.address.toLowerCase().includes(item.currentLocation.toLowerCase()) ? ` (${item.currentLocation})` : ''}` : (item.currentLocation || item.CurrentLocation || 'Location Unspecified')}</Text>
             {(item.updatedAt || item.UpdatedAt) && (
               <Text style={styles.candidateUpdated}>• Active: {formatRelativeTime(item.updatedAt || item.UpdatedAt)}</Text>
             )}
@@ -229,7 +229,7 @@ export const RecruiterCandidateSearchScreen = () => {
         <View style={styles.filterRow}>
           <TextInput
             style={[styles.smallInput, { flex: 1 }]}
-            placeholder="City/Location"
+            placeholder="Location (e.g. Dwarka, Rohini)"
             value={location}
             onChangeText={setLocation}
           />

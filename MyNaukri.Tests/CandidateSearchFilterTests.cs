@@ -440,4 +440,155 @@ public class CandidateSearchFilterTests
             Assert.True(matches[0].AiRecommendationScore > matches[2].AiRecommendationScore);
         }
     }
+
+    [Fact]
+    public async Task SearchCandidatesAsync_LocationSearch_MatchesEveryPartOfAddress_DwarkaAndRohini()
+    {
+        var dbName = "AddressLocationDb_" + Guid.NewGuid();
+        var options = CreateInMemoryOptions(dbName);
+
+        using (var context = new ApplicationDbContext(options))
+        {
+            var userDwarka1 = new User { FirstName = "Aarav", LastName = "DwarkaFlat", Email = "aarav.dwarka@test.com", Role = Role.Candidate };
+            var userRohini = new User { FirstName = "Pooja", LastName = "RohiniStreet", Email = "pooja.rohini@test.com", Role = Role.Candidate };
+            var userNoida = new User { FirstName = "Rahul", LastName = "NoidaSec", Email = "rahul.noida@test.com", Role = Role.Candidate };
+            var userDwarkaLoc = new User { FirstName = "Simran", LastName = "DwarkaOnly", Email = "simran.dwarka@test.com", Role = Role.Candidate };
+
+            context.Users.AddRange(userDwarka1, userRohini, userNoida, userDwarkaLoc);
+            await context.SaveChangesAsync();
+
+            // Candidate 1: Address contains street level and Dwarka
+            var cand1 = new Candidate
+            {
+                UserId = userDwarka1.Id,
+                Skills = "Mathematics",
+                Address = "Flat 102, Pocket 1, Sector 11, Dwarka",
+                CurrentLocation = "New Delhi",
+                TotalExperienceYears = 4
+            };
+
+            // Candidate 2: Address contains street level and Rohini
+            var cand2 = new Candidate
+            {
+                UserId = userRohini.Id,
+                Skills = "English",
+                Address = "H.No 45, Street 3, Pocket 4, Sector 8, Rohini",
+                CurrentLocation = "Delhi",
+                TotalExperienceYears = 3
+            };
+
+            // Candidate 3: Noida
+            var cand3 = new Candidate
+            {
+                UserId = userNoida.Id,
+                Skills = "Science",
+                Address = "Block B, Sector 62",
+                CurrentLocation = "Noida",
+                TotalExperienceYears = 5
+            };
+
+            // Candidate 4: Address empty, but CurrentLocation has Dwarka
+            var cand4 = new Candidate
+            {
+                UserId = userDwarkaLoc.Id,
+                Skills = "Physics",
+                Address = "",
+                CurrentLocation = "Dwarka, New Delhi",
+                TotalExperienceYears = 2
+            };
+
+            context.Candidates.AddRange(cand1, cand2, cand3, cand4);
+            await context.SaveChangesAsync();
+        }
+
+        using (var context = new ApplicationDbContext(options))
+        {
+            var searchService = new DbSearchService(context);
+
+            // 1. Search "Dwarka" -> should return Candidates 1 and 4
+            var dwarkaResults = (await searchService.SearchCandidatesAsync(new CandidateSearchRequestDto { Location = "Dwarka" })).ToList();
+            Assert.Equal(2, dwarkaResults.Count);
+            Assert.Contains(dwarkaResults, r => r.FirstName == "Aarav");
+            Assert.Contains(dwarkaResults, r => r.FirstName == "Simran");
+            Assert.DoesNotContain(dwarkaResults, r => r.FirstName == "Pooja");
+            Assert.DoesNotContain(dwarkaResults, r => r.FirstName == "Rahul");
+
+            // 2. Search "Rohini" -> should return Candidate 2 only
+            var rohiniResults = (await searchService.SearchCandidatesAsync(new CandidateSearchRequestDto { Location = "Rohini" })).ToList();
+            Assert.Single(rohiniResults);
+            Assert.Equal("Pooja", rohiniResults[0].FirstName);
+
+            // 3. Search street/sector level "Sector 11" -> returns Candidate 1
+            var sectorResults = (await searchService.SearchCandidatesAsync(new CandidateSearchRequestDto { Location = "Sector 11" })).ToList();
+            Assert.Single(sectorResults);
+            Assert.Equal("Aarav", sectorResults[0].FirstName);
+
+            // 4. Search street level "Street 3" -> returns Candidate 2 (Rohini)
+            var streetResults = (await searchService.SearchCandidatesAsync(new CandidateSearchRequestDto { Location = "Street 3" })).ToList();
+            Assert.Single(streetResults);
+            Assert.Equal("Pooja", streetResults[0].FirstName);
+
+            // 5. Search pocket level "Pocket 1" -> returns Candidate 1
+            var pocketResults = (await searchService.SearchCandidatesAsync(new CandidateSearchRequestDto { Location = "Pocket 1" })).ToList();
+            Assert.Single(pocketResults);
+            Assert.Equal("Aarav", pocketResults[0].FirstName);
+
+            // 6. Search "Dwarka, Delhi" -> hierarchical, matches Dwarka candidates, NOT Rohini or Noida
+            var dwarkaDelhiResults = (await searchService.SearchCandidatesAsync(new CandidateSearchRequestDto { Location = "Dwarka, Delhi" })).ToList();
+            Assert.Equal(2, dwarkaDelhiResults.Count);
+            Assert.Contains(dwarkaDelhiResults, r => r.FirstName == "Aarav");
+            Assert.Contains(dwarkaDelhiResults, r => r.FirstName == "Simran");
+            Assert.DoesNotContain(dwarkaDelhiResults, r => r.FirstName == "Pooja");
+
+            // 7. Search "Dwarka, Rohini" (multiple alternative areas) -> returns candidates in Dwarka and Rohini
+            var multiAreaResults = (await searchService.SearchCandidatesAsync(new CandidateSearchRequestDto { Location = "Dwarka, Rohini" })).ToList();
+            Assert.Equal(3, multiAreaResults.Count);
+            Assert.Contains(multiAreaResults, r => r.FirstName == "Aarav");
+            Assert.Contains(multiAreaResults, r => r.FirstName == "Simran");
+            Assert.Contains(multiAreaResults, r => r.FirstName == "Pooja");
+            Assert.DoesNotContain(multiAreaResults, r => r.FirstName == "Rahul");
+
+            // 8. Search explicit OR: "Dwarka or Rohini"
+            var explicitOrResults = (await searchService.SearchCandidatesAsync(new CandidateSearchRequestDto { Location = "Dwarka or Rohini" })).ToList();
+            Assert.Equal(3, explicitOrResults.Count);
+            Assert.DoesNotContain(explicitOrResults, r => r.FirstName == "Rahul");
+
+            // 9. Keyword search for "Rohini" -> matches Candidate 2 even when typed in Keyword box
+            var keywordResults = (await searchService.SearchCandidatesAsync(new CandidateSearchRequestDto { Keyword = "Rohini" })).ToList();
+            Assert.Single(keywordResults);
+            Assert.Equal("Pooja", keywordResults[0].FirstName);
+
+            // 10. AI recommendation score check
+            var (scoreDwarka, reasonDwarka) = DbSearchService.CalculateAiRecommendation(
+                context.Candidates.First(c => c.User.FirstName == "Aarav"),
+                new CandidateSearchRequestDto { Location = "Dwarka" });
+            Assert.True(scoreDwarka >= 15);
+            Assert.Contains("Dwarka", reasonDwarka, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void DocumentTextExtractor_ExtractsStreetLevelAddressAndDwarkaRohiniLocalities()
+    {
+        var resumeText = @"
+CURRICULUM VITAE
+Aarav Sharma
+Email: aarav.sharma@example.com
+Phone: +91 9876543210
+Address: Flat 204, Pocket 1, Sector 11, Dwarka, New Delhi - 110075
+Total Experience: 5 years of teaching experience in Mathematics
+Education: M.Sc Mathematics, B.Ed
+Boards: CBSE, ICSE
+Skills: Mathematics, Calculus, Algebra, Pedagogy
+";
+
+        var parsed = DocumentTextExtractor.ExtractFallbackResume(resumeText, "resume.txt");
+
+        Assert.Equal("Aarav", parsed.FirstName);
+        Assert.Equal("aarav.sharma@example.com", parsed.Email);
+        Assert.Contains("Dwarka", parsed.Address);
+        Assert.Contains("Sector 11", parsed.Address);
+        Assert.Contains("Dwarka", parsed.CurrentLocation);
+    }
 }
+

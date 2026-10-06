@@ -156,6 +156,7 @@ public class ResumeProcessingBackgroundService : BackgroundService
             candidate.ProfileLastParsedAt = DateTime.UtcNow;
             if (!string.IsNullOrEmpty(parsedResult.PhoneNumber)) candidate.PhoneNumber = parsedResult.PhoneNumber;
             if (!string.IsNullOrEmpty(parsedResult.CurrentLocation)) candidate.CurrentLocation = parsedResult.CurrentLocation;
+            if (!string.IsNullOrEmpty(parsedResult.Address)) candidate.Address = parsedResult.Address;
             if (parsedResult.TotalExperienceYears > 0) candidate.TotalExperienceYears = parsedResult.TotalExperienceYears;
             if (!string.IsNullOrEmpty(parsedResult.ClassesTaught)) candidate.ClassesTaught = parsedResult.ClassesTaught;
             if (!string.IsNullOrEmpty(parsedResult.BoardsTaught)) candidate.BoardsTaught = parsedResult.BoardsTaught;

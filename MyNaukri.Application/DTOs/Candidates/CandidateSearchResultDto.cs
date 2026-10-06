@@ -11,6 +11,7 @@ public class CandidateSearchResultDto
     public string Summary { get; set; } = string.Empty;
     public int TotalExperienceYears { get; set; }
     public string CurrentLocation { get; set; } = string.Empty;
+    public string? Address { get; set; }
     public string Education { get; set; } = string.Empty;
     
     // New fields

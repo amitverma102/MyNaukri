@@ -235,13 +235,74 @@ public static class DocumentTextExtractor
             classes = string.Join(", ", foundClasses);
         }
 
-        // 8. Location
+        // 8. Address & Location (including street-level and sub-localities like Dwarka, Rohini)
         string location = string.Empty;
-        var knownCities = new[] { "Bengaluru", "Bangalore", "Delhi", "New Delhi", "Noida", "Gurugram", "Gurgaon", "Mumbai", "Pune", "Hyderabad", "Chennai", "Kolkata", "Ahmedabad", "Jaipur", "Lucknow", "Chandigarh", "Indore", "Bhopal", "Patna", "Kochi", "Coimbatore" };
-        var foundCity = knownCities.FirstOrDefault(c => Regex.IsMatch(cleanText, $@"\b{c}\b", RegexOptions.IgnoreCase));
+        string address = string.Empty;
+
+        // Check for prominent sub-localities/areas
+        var knownLocalities = new[] 
+        { 
+            "Dwarka", "Rohini", "Janakpuri", "Saket", "Pitampura", "Vasant Kunj", "Karol Bagh", "Laxmi Nagar", 
+            "Mayur Vihar", "Paschim Vihar", "Uttam Nagar", "Indirapuram", "Vaishali", "Rajouri Garden", 
+            "Whitefield", "Koramangala", "Indiranagar", "HSR Layout", "Electronic City", "Jayanagar",
+            "Andheri", "Bandra", "Powai", "Borivali", "Goregaon", "Thane", "Navi Mumbai", "Malad",
+            "Gachibowli", "Hitec City", "Madhapur", "Jubilee Hills", "Kukatpally", "Banjara Hills",
+            "Velachery", "Adyar", "Anna Nagar", "T. Nagar", "OMR", "Tambaram",
+            "Salt Lake", "New Town", "Ballygunge", "Rajarhat",
+            "Kothrud", "Hinjawadi", "Wakad", "Baner", "Viman Nagar", "Hadapsar"
+        };
+
+        var foundLocality = knownLocalities.FirstOrDefault(l => Regex.IsMatch(cleanText, $@"\b{Regex.Escape(l)}\b", RegexOptions.IgnoreCase));
+
+        // Known major cities
+        var knownCities = new[] { "Bengaluru", "Bangalore", "Delhi", "New Delhi", "Noida", "Greater Noida", "Gurugram", "Gurgaon", "Mumbai", "Pune", "Hyderabad", "Chennai", "Kolkata", "Ahmedabad", "Jaipur", "Lucknow", "Chandigarh", "Indore", "Bhopal", "Patna", "Kochi", "Coimbatore", "Ghaziabad", "Faridabad" };
+        var foundCity = knownCities.FirstOrDefault(c => Regex.IsMatch(cleanText, $@"\b{Regex.Escape(c)}\b", RegexOptions.IgnoreCase));
         if (!string.IsNullOrEmpty(foundCity))
         {
             location = foundCity.Equals("Bangalore", StringComparison.OrdinalIgnoreCase) ? "Bengaluru" : (foundCity.Equals("Gurgaon", StringComparison.OrdinalIgnoreCase) ? "Gurugram" : foundCity);
+        }
+
+        // Try extracting full address line if an explicit Address prefix or sector/street pattern exists
+        var addressLineMatch = Regex.Match(cleanText, @"(?:Address|Residing at|Correspondence Address|Residential Address)\s*[:\-]\s*([^\r\n]+(?:\r?\n[ \t]+[^\r\n]+)?)", RegexOptions.IgnoreCase);
+        if (addressLineMatch.Success)
+        {
+            address = addressLineMatch.Groups[1].Value.Trim();
+        }
+        else
+        {
+            // Look for street/sector/pocket patterns in lines
+            var streetLine = lines.FirstOrDefault(l => 
+                Regex.IsMatch(l, @"\b(?:Sector|Sec|Pocket|Pkt|Block|Plot|Flat|H\.No|House No|Street|Road|Lane|Phase)\s*[\w\d\-\/]+", RegexOptions.IgnoreCase) &&
+                ((foundLocality != null && l.Contains(foundLocality, StringComparison.OrdinalIgnoreCase)) || (foundCity != null && l.Contains(foundCity, StringComparison.OrdinalIgnoreCase)) || Regex.IsMatch(l, @"\b\d{6}\b")));
+
+            if (!string.IsNullOrWhiteSpace(streetLine))
+            {
+                address = streetLine.Trim();
+            }
+            else if (!string.IsNullOrEmpty(foundLocality))
+            {
+                address = !string.IsNullOrEmpty(location) && !foundLocality.Equals(location, StringComparison.OrdinalIgnoreCase)
+                    ? $"{foundLocality}, {location}"
+                    : foundLocality;
+            }
+        }
+
+        if (string.IsNullOrEmpty(location))
+        {
+            if (!string.IsNullOrEmpty(foundLocality))
+            {
+                var delhiLocalities = new[] { "Dwarka", "Rohini", "Janakpuri", "Saket", "Pitampura", "Vasant Kunj", "Karol Bagh", "Laxmi Nagar", "Mayur Vihar", "Paschim Vihar", "Uttam Nagar" };
+                if (delhiLocalities.Contains(foundLocality, StringComparer.OrdinalIgnoreCase)) location = "New Delhi";
+                else location = foundLocality;
+            }
+            else if (!string.IsNullOrEmpty(address))
+            {
+                location = address;
+            }
+        }
+        else if (!string.IsNullOrEmpty(foundLocality) && !location.Contains(foundLocality, StringComparison.OrdinalIgnoreCase))
+        {
+            location = $"{foundLocality}, {location}";
         }
 
         // 9. Certifications
@@ -275,6 +336,7 @@ public static class DocumentTextExtractor
             PhoneNumber = phone,
             TotalExperienceYears = expYears,
             CurrentLocation = location,
+            Address = address,
             ClassesTaught = classes,
             BoardsTaught = boards,
             Education = education,

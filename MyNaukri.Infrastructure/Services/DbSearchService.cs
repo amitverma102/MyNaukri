@@ -78,6 +78,18 @@ public class DbSearchService : ISearchService
                 var currLocation = (candidate.CurrentLocation ?? "").ToLower().Trim();
                 if (!string.IsNullOrEmpty(currLocation) && !prefLocations.Contains(currLocation)) prefLocations.Add(currLocation);
 
+                if (!string.IsNullOrWhiteSpace(candidate.Address))
+                {
+                    var addrParts = candidate.Address.ToLower().Split(new[] { ',', ';', '/', '-', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    foreach (var part in addrParts)
+                    {
+                        if (part.Length > 2 && !prefLocations.Contains(part))
+                        {
+                            prefLocations.Add(part);
+                        }
+                    }
+                }
+
                 var subjects = new List<string>();
                 subjects.AddRange((candidate.Skills ?? "").ToLower().Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
                 subjects.AddRange((candidate.ClassesTaught ?? "").ToLower().Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
@@ -125,8 +137,34 @@ public class DbSearchService : ISearchService
 
         if (!string.IsNullOrWhiteSpace(request.Location))
         {
-            var lowerLoc = request.Location.ToLower();
-            dbQuery = dbQuery.Where(j => j.Location.ToLower().Contains(lowerLoc));
+            var lowerLoc = request.Location.Trim().ToLower();
+            var locTokens = lowerLoc.Split(new[] { ',', ';', '/', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (locTokens.Length <= 1)
+            {
+                dbQuery = dbQuery.Where(j => j.Location.ToLower().Contains(lowerLoc));
+            }
+            else
+            {
+                var parameter = System.Linq.Expressions.Expression.Parameter(typeof(Job), "j");
+                var locProp = System.Linq.Expressions.Expression.Property(parameter, nameof(Job.Location));
+                var toLowerMethod = typeof(string).GetMethod("ToLower", Type.EmptyTypes)!;
+                var containsMethod = typeof(string).GetMethod("Contains", new[] { typeof(string) })!;
+                var locLower = System.Linq.Expressions.Expression.Call(locProp, toLowerMethod);
+
+                System.Linq.Expressions.Expression? combined = null;
+                foreach (var token in locTokens)
+                {
+                    var tokenConst = System.Linq.Expressions.Expression.Constant(token);
+                    var contains = System.Linq.Expressions.Expression.Call(locLower, containsMethod, tokenConst);
+                    combined = combined == null ? contains : System.Linq.Expressions.Expression.OrElse(combined, contains);
+                }
+
+                if (combined != null)
+                {
+                    var lambda = System.Linq.Expressions.Expression.Lambda<Func<Job, bool>>(combined, parameter);
+                    dbQuery = dbQuery.Where(lambda);
+                }
+            }
         }
 
         if (request.JobType.HasValue)
@@ -241,8 +279,7 @@ public class DbSearchService : ISearchService
 
         if (!string.IsNullOrWhiteSpace(request.Location))
         {
-            var lowerLoc = request.Location.ToLower();
-            dbQuery = dbQuery.Where(c => c.CurrentLocation.ToLower().Contains(lowerLoc) || c.PreferredLocations.ToLower().Contains(lowerLoc));
+            dbQuery = ApplyLocationFilter(dbQuery, request.Location);
         }
 
         if (request.MinExperienceYears.HasValue)
@@ -336,6 +373,7 @@ public class DbSearchService : ISearchService
                 Summary = c.Summary,
                 TotalExperienceYears = c.TotalExperienceYears,
                 CurrentLocation = c.CurrentLocation,
+                Address = c.Address,
                 Education = c.Education,
                 Gender = c.Gender,
                 DifferentlyAbled = c.DifferentlyAbled,
@@ -498,15 +536,20 @@ public class DbSearchService : ISearchService
         if (!string.IsNullOrWhiteSpace(request.Location))
         {
             var targetLoc = request.Location.Trim().ToLowerInvariant();
+            var candAddr = (c.Address ?? "").ToLowerInvariant();
             var currLoc = (c.CurrentLocation ?? "").ToLowerInvariant();
             var prefLocs = (c.PreferredLocations ?? "").ToLowerInvariant();
+            var combinedLoc = $"{candAddr} {currLoc}".Trim();
 
-            if (currLoc.Contains(targetLoc) || targetLoc.Contains(currLoc))
+            if (MatchesLocationString(combinedLoc, targetLoc))
             {
                 totalScore += 15m;
-                highlights.Add($"Location: {c.CurrentLocation}");
+                var displayLoc = !string.IsNullOrWhiteSpace(c.Address) 
+                    ? $"{c.Address} ({c.CurrentLocation})" 
+                    : c.CurrentLocation;
+                highlights.Add($"Location: {displayLoc}");
             }
-            else if (prefLocs.Contains(targetLoc))
+            else if (MatchesLocationString(prefLocs, targetLoc))
             {
                 totalScore += 12m;
                 highlights.Add($"Prefers: {request.Location}");
@@ -519,9 +562,12 @@ public class DbSearchService : ISearchService
         else
         {
             totalScore += 10m; // baseline
-            if (!string.IsNullOrWhiteSpace(c.CurrentLocation))
+            var displayLoc = !string.IsNullOrWhiteSpace(c.Address) 
+                ? $"{c.Address} ({c.CurrentLocation})" 
+                : c.CurrentLocation;
+            if (!string.IsNullOrWhiteSpace(displayLoc))
             {
-                highlights.Add($"Location: {c.CurrentLocation}");
+                highlights.Add($"Location: {displayLoc}");
             }
         }
 
@@ -633,18 +679,251 @@ public class DbSearchService : ISearchService
             var lastLower = System.Linq.Expressions.Expression.Call(lastProp, toLowerMethod);
             var lastContains = System.Linq.Expressions.Expression.Call(lastLower, containsMethod, tokenConst);
 
+            // c.Address != null && c.Address.ToLower().Contains(token)
+            var addrProp = System.Linq.Expressions.Expression.Property(parameter, nameof(Candidate.Address));
+            var addrNotNull = System.Linq.Expressions.Expression.NotEqual(addrProp, System.Linq.Expressions.Expression.Constant(null, typeof(string)));
+            var addrLower = System.Linq.Expressions.Expression.Call(addrProp, toLowerMethod);
+            var addrContains = System.Linq.Expressions.Expression.AndAlso(addrNotNull, System.Linq.Expressions.Expression.Call(addrLower, containsMethod, tokenConst));
+
+            // c.CurrentLocation != null && c.CurrentLocation.ToLower().Contains(token)
+            var locProp = System.Linq.Expressions.Expression.Property(parameter, nameof(Candidate.CurrentLocation));
+            var locNotNull = System.Linq.Expressions.Expression.NotEqual(locProp, System.Linq.Expressions.Expression.Constant(null, typeof(string)));
+            var locLower = System.Linq.Expressions.Expression.Call(locProp, toLowerMethod);
+            var locContains = System.Linq.Expressions.Expression.AndAlso(locNotNull, System.Linq.Expressions.Expression.Call(locLower, containsMethod, tokenConst));
+
             var tokenExpr = System.Linq.Expressions.Expression.OrElse(skillsContains, summaryContains);
             tokenExpr = System.Linq.Expressions.Expression.OrElse(tokenExpr, eduContains);
             tokenExpr = System.Linq.Expressions.Expression.OrElse(tokenExpr, classesContains);
             tokenExpr = System.Linq.Expressions.Expression.OrElse(tokenExpr, boardsContains);
             tokenExpr = System.Linq.Expressions.Expression.OrElse(tokenExpr, firstContains);
             tokenExpr = System.Linq.Expressions.Expression.OrElse(tokenExpr, lastContains);
+            tokenExpr = System.Linq.Expressions.Expression.OrElse(tokenExpr, addrContains);
+            tokenExpr = System.Linq.Expressions.Expression.OrElse(tokenExpr, locContains);
 
             combined = combined == null ? tokenExpr : System.Linq.Expressions.Expression.OrElse(combined, tokenExpr);
         }
 
         var lambda = System.Linq.Expressions.Expression.Lambda<Func<Candidate, bool>>(combined!, parameter);
         return query.Where(lambda);
+    }
+
+    private static readonly HashSet<string> MajorCitiesAndRegions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "delhi", "new delhi", "delhi ncr", "ncr", "noida", "greater noida", "gurugram", "gurgaon", 
+        "ghaziabad", "faridabad", "mumbai", "pune", "bengaluru", "bangalore", "hyderabad", "chennai", 
+        "kolkata", "ahmedabad", "jaipur", "lucknow", "chandigarh", "indore", "bhopal", "patna", "kochi", 
+        "coimbatore", "india", "haryana", "uttar pradesh", "up", "maharashtra", "karnataka", "tamil nadu"
+    };
+
+    public static IQueryable<Candidate> ApplyLocationFilter(IQueryable<Candidate> query, string location)
+    {
+        if (string.IsNullOrWhiteSpace(location)) return query;
+
+        var parameter = System.Linq.Expressions.Expression.Parameter(typeof(Candidate), "c");
+        var expr = BuildLocationExpression(parameter, location);
+        if (expr == null) return query;
+
+        var lambda = System.Linq.Expressions.Expression.Lambda<Func<Candidate, bool>>(expr, parameter);
+        return query.Where(lambda);
+    }
+
+    private static System.Linq.Expressions.Expression? BuildLocationExpression(System.Linq.Expressions.ParameterExpression parameter, string location)
+    {
+        var rawLocation = location.Trim();
+        if (string.IsNullOrEmpty(rawLocation)) return null;
+
+        // Check for explicit OR separators: " or ", " OR ", "|", "/"
+        string[] orSeparators = new[] { " or ", " OR ", " Or ", "|", "/" };
+        var hasExplicitOr = orSeparators.Any(sep => rawLocation.Contains(sep, StringComparison.OrdinalIgnoreCase));
+
+        List<string> orBranches;
+        if (hasExplicitOr)
+        {
+            orBranches = rawLocation.Split(new[] { " or ", " OR ", " Or ", "|", "/" }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        }
+        else
+        {
+            var commaParts = rawLocation.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (commaParts.Length > 1)
+            {
+                // If any comma part is a broad city/region (e.g. "Delhi", "New Delhi", "NCR") and another is a locality/street (e.g. "Dwarka", "Rohini", "Sector 11")
+                // then they represent a hierarchical address (AND relationship).
+                // If NONE of them is a broad city/region (e.g. "Dwarka, Rohini"), they represent alternative areas (OR relationship).
+                bool hasBroadRegion = commaParts.Any(p => MajorCitiesAndRegions.Contains(p.Trim()));
+                if (hasBroadRegion)
+                {
+                    orBranches = new List<string> { rawLocation };
+                }
+                else
+                {
+                    orBranches = commaParts.ToList();
+                }
+            }
+            else
+            {
+                orBranches = new List<string> { rawLocation };
+            }
+        }
+
+        System.Linq.Expressions.Expression? combinedOr = null;
+
+        foreach (var branch in orBranches)
+        {
+            var branchExpr = BuildLocationBranchExpression(parameter, branch);
+            if (branchExpr != null)
+            {
+                combinedOr = combinedOr == null ? branchExpr : System.Linq.Expressions.Expression.OrElse(combinedOr, branchExpr);
+            }
+        }
+
+        return combinedOr;
+    }
+
+    private static System.Linq.Expressions.Expression? BuildLocationBranchExpression(System.Linq.Expressions.ParameterExpression parameter, string branch)
+    {
+        var cleanBranch = branch.Trim();
+        if (string.IsNullOrEmpty(cleanBranch)) return null;
+
+        // Comma-separated parts within branch (e.g. "Dwarka, Delhi" or "Sector 11, Dwarka")
+        var commaParts = cleanBranch.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (commaParts.Length > 1)
+        {
+            System.Linq.Expressions.Expression? andExpr = null;
+            foreach (var part in commaParts)
+            {
+                var termExpr = BuildSubPhraseExpression(parameter, part);
+                if (termExpr != null)
+                {
+                    andExpr = andExpr == null ? termExpr : System.Linq.Expressions.Expression.AndAlso(andExpr, termExpr);
+                }
+            }
+            return andExpr;
+        }
+
+        return BuildSubPhraseExpression(parameter, cleanBranch);
+    }
+
+    private static System.Linq.Expressions.Expression? BuildSubPhraseExpression(System.Linq.Expressions.ParameterExpression parameter, string phrase)
+    {
+        var cleanPhrase = phrase.Trim();
+        if (string.IsNullOrEmpty(cleanPhrase)) return null;
+
+        // Try direct phrase match first: c.Address / c.CurrentLocation / c.PreferredLocations contains phrase
+        var phraseMatch = BuildSingleTermExpression(parameter, cleanPhrase);
+
+        // Also if phrase has multiple words (e.g. "Dwarka Sector 11" or "Pocket 1 Dwarka"),
+        // allow matching if all individual words (>2 chars or numbers) match
+        var words = cleanPhrase.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(w => w.Length > 1)
+            .ToList();
+
+        if (words.Count > 1)
+        {
+            System.Linq.Expressions.Expression? wordAnd = null;
+            foreach (var w in words)
+            {
+                var wExpr = BuildSingleTermExpression(parameter, w);
+                wordAnd = wordAnd == null ? wExpr : System.Linq.Expressions.Expression.AndAlso(wordAnd, wExpr);
+            }
+
+            if (wordAnd != null)
+            {
+                return System.Linq.Expressions.Expression.OrElse(phraseMatch, wordAnd);
+            }
+        }
+
+        return phraseMatch;
+    }
+
+    private static System.Linq.Expressions.Expression BuildSingleTermExpression(System.Linq.Expressions.ParameterExpression parameter, string term)
+    {
+        var termConst = System.Linq.Expressions.Expression.Constant(term.ToLowerInvariant());
+        var toLowerMethod = typeof(string).GetMethod("ToLower", Type.EmptyTypes)!;
+        var containsMethod = typeof(string).GetMethod("Contains", new[] { typeof(string) })!;
+
+        // c.Address != null && c.Address.ToLower().Contains(term)
+        var addrProp = System.Linq.Expressions.Expression.Property(parameter, nameof(Candidate.Address));
+        var addrNotNull = System.Linq.Expressions.Expression.NotEqual(addrProp, System.Linq.Expressions.Expression.Constant(null, typeof(string)));
+        var addrLower = System.Linq.Expressions.Expression.Call(addrProp, toLowerMethod);
+        var addrContains = System.Linq.Expressions.Expression.AndAlso(addrNotNull, System.Linq.Expressions.Expression.Call(addrLower, containsMethod, termConst));
+
+        // c.CurrentLocation != null && c.CurrentLocation.ToLower().Contains(term)
+        var currProp = System.Linq.Expressions.Expression.Property(parameter, nameof(Candidate.CurrentLocation));
+        var currNotNull = System.Linq.Expressions.Expression.NotEqual(currProp, System.Linq.Expressions.Expression.Constant(null, typeof(string)));
+        var currLower = System.Linq.Expressions.Expression.Call(currProp, toLowerMethod);
+        var currContains = System.Linq.Expressions.Expression.AndAlso(currNotNull, System.Linq.Expressions.Expression.Call(currLower, containsMethod, termConst));
+
+        // c.PreferredLocations != null && c.PreferredLocations.ToLower().Contains(term)
+        var prefProp = System.Linq.Expressions.Expression.Property(parameter, nameof(Candidate.PreferredLocations));
+        var prefNotNull = System.Linq.Expressions.Expression.NotEqual(prefProp, System.Linq.Expressions.Expression.Constant(null, typeof(string)));
+        var prefLower = System.Linq.Expressions.Expression.Call(prefProp, toLowerMethod);
+        var prefContains = System.Linq.Expressions.Expression.AndAlso(prefNotNull, System.Linq.Expressions.Expression.Call(prefLower, containsMethod, termConst));
+
+        return System.Linq.Expressions.Expression.OrElse(
+            System.Linq.Expressions.Expression.OrElse(addrContains, currContains), 
+            prefContains);
+    }
+
+    public static bool MatchesLocationString(string candidateLocText, string targetLoc)
+    {
+        if (string.IsNullOrWhiteSpace(targetLoc)) return true;
+        if (string.IsNullOrWhiteSpace(candidateLocText)) return false;
+
+        var cand = candidateLocText.ToLowerInvariant();
+        var target = targetLoc.Trim().ToLowerInvariant();
+
+        if (cand.Contains(target) || target.Contains(cand)) return true;
+
+        // Check for explicit OR separators
+        string[] orSeparators = new[] { " or ", " | ", " / ", "|", "/" };
+        bool hasExplicitOr = orSeparators.Any(sep => target.Contains(sep));
+
+        List<string> branches;
+        if (hasExplicitOr)
+        {
+            branches = target.Split(new[] { " or ", "|", "/" }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        }
+        else
+        {
+            var commaParts = target.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (commaParts.Length > 1)
+            {
+                bool hasBroadRegion = commaParts.Any(p => MajorCitiesAndRegions.Contains(p.Trim()));
+                if (hasBroadRegion)
+                {
+                    branches = new List<string> { target };
+                }
+                else
+                {
+                    branches = commaParts.ToList();
+                }
+            }
+            else
+            {
+                branches = new List<string> { target };
+            }
+        }
+
+        foreach (var branch in branches)
+        {
+            var commaParts = branch.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (commaParts.Length > 1)
+            {
+                bool allMatch = commaParts.All(p => cand.Contains(p) || p.Contains(cand));
+                if (allMatch) return true;
+            }
+            else
+            {
+                if (cand.Contains(branch) || branch.Contains(cand)) return true;
+
+                var words = branch.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Where(w => w.Length > 1)
+                    .ToList();
+                if (words.Count > 1 && words.All(w => cand.Contains(w))) return true;
+            }
+        }
+
+        return false;
     }
 
     public async Task<IEnumerable<CandidateSearchResultDto>> GetAiMatchedCandidatesForJobAsync(Guid jobId, Guid? recruiterId = null)
@@ -715,6 +994,7 @@ public class DbSearchService : ISearchService
                 Summary = c.Summary,
                 TotalExperienceYears = c.TotalExperienceYears,
                 CurrentLocation = c.CurrentLocation,
+                Address = c.Address,
                 Education = c.Education,
                 Gender = c.Gender,
                 DifferentlyAbled = c.DifferentlyAbled,

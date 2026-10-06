@@ -43,11 +43,12 @@ You are an expert resume parser for the education sector. Extract the following 
 4. Skills: A comma-separated list of technical and soft skills.
 5. PhoneNumber: The candidate's phone number.
 6. TotalExperienceYears: An integer representing the total years of professional experience.
-7. CurrentLocation: The candidate's current city/location.
-8. ClassesTaught: A comma-separated list of school classes or grades taught (e.g. 10th, 12th, Primary).
-9. BoardsTaught: A comma-separated list of education boards taught (e.g. CBSE, ICSE, State Board).
-10. Education: The candidate's highest educational degree (e.g. B.Ed, M.Sc).
-11. Certifications: A comma-separated list of professional certifications.
+7. CurrentLocation: The candidate's current city and state (e.g. New Delhi, Bengaluru).
+8. Address: The candidate's full address or residential locality/street/sector from the resume (e.g. Flat 102, Pocket 1, Sector 11, Dwarka, New Delhi; Sector 8, Rohini, Delhi; Indirapuram, Ghaziabad).
+9. ClassesTaught: A comma-separated list of school classes or grades taught (e.g. 10th, 12th, Primary).
+10. BoardsTaught: A comma-separated list of education boards taught (e.g. CBSE, ICSE, State Board).
+11. Education: The candidate's highest educational degree (e.g. B.Ed, M.Sc).
+12. Certifications: A comma-separated list of professional certifications.
 
 Respond ONLY with a valid JSON object matching this schema exactly, and nothing else (leave fields empty if not found):
 {{
@@ -58,6 +59,7 @@ Respond ONLY with a valid JSON object matching this schema exactly, and nothing 
   ""phoneNumber"": ""string"",
   ""totalExperienceYears"": 0,
   ""currentLocation"": ""string"",
+  ""address"": ""string"",
   ""classesTaught"": ""string"",
   ""boardsTaught"": ""string"",
   ""education"": ""string"",

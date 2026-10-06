@@ -11,6 +11,7 @@ public class UpdateCandidateProfileDto
     public decimal? ExpectedSalary { get; set; }
     public string? NoticePeriod { get; set; }
     public string? CurrentLocation { get; set; }
+    public string? Address { get; set; }
     public string? PreferredLocations { get; set; }
     public string? ClassesTaught { get; set; }
     public string? BoardsTaught { get; set; }

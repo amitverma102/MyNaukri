@@ -36,6 +36,7 @@ export default function CandidateProfile() {
   const [expectedSalary, setExpectedSalary] = useState<number | ''>('');
   const [noticePeriod, setNoticePeriod] = useState('');
   const [currentLocation, setCurrentLocation] = useState('');
+  const [address, setAddress] = useState('');
   const [preferredLocations, setPreferredLocations] = useState('');
   const [classesTaught, setClassesTaught] = useState('');
   const [boardsTaught, setBoardsTaught] = useState('');
@@ -95,6 +96,7 @@ export default function CandidateProfile() {
       setExpectedSalary(profile.expectedSalary ?? profile.ExpectedSalary ?? '');
       setNoticePeriod(profile.noticePeriod || profile.NoticePeriod || '');
       setCurrentLocation(profile.currentLocation || profile.CurrentLocation || '');
+      setAddress(profile.address || profile.Address || '');
       setPreferredLocations(profile.preferredLocations || profile.PreferredLocations || '');
       setClassesTaught(profile.classesTaught || profile.ClassesTaught || '');
       setBoardsTaught(profile.boardsTaught || profile.BoardsTaught || '');
@@ -139,6 +141,7 @@ export default function CandidateProfile() {
         expectedSalary: expectedSalary === '' ? null : Number(expectedSalary),
         noticePeriod,
         currentLocation,
+        address,
         preferredLocations,
         classesTaught,
         boardsTaught,
@@ -196,6 +199,8 @@ export default function CandidateProfile() {
       }
       const newLoc = data.currentLocation || data.CurrentLocation;
       if (newLoc) setCurrentLocation(newLoc);
+      const newAddr = data.address || data.Address;
+      if (newAddr) setAddress(newAddr);
       const newClasses = data.classesTaught || data.ClassesTaught;
       if (newClasses) setClassesTaught(newClasses);
       const newBoards = data.boardsTaught || data.BoardsTaught;
@@ -449,7 +454,7 @@ export default function CandidateProfile() {
           <Box sx={{ display: 'flex', gap: 2, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
             <TextField
               fullWidth
-              label="Current Location"
+              label="Current City / Region"
               margin="normal"
               value={currentLocation}
               onChange={(e) => setCurrentLocation(e.target.value)}
@@ -464,6 +469,16 @@ export default function CandidateProfile() {
               placeholder="e.g. Noida, Gurgaon, Delhi NCR"
             />
           </Box>
+
+          <TextField
+            fullWidth
+            label="Street Address / Locality / Sector"
+            margin="normal"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="e.g. Flat 102, Pocket 1, Sector 11, Dwarka"
+            helperText="Include street name, sector, pocket, and sub-locality (e.g. Dwarka, Rohini) for precision recruiter search"
+          />
 
           <Divider sx={{ my: 3 }} />
 

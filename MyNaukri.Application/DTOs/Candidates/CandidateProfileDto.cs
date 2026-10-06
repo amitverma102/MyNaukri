@@ -17,6 +17,7 @@ public class CandidateProfileDto
     public decimal? ExpectedSalary { get; set; }
     public string NoticePeriod { get; set; } = string.Empty;
     public string CurrentLocation { get; set; } = string.Empty;
+    public string Address { get; set; } = string.Empty;
     public string PreferredLocations { get; set; } = string.Empty;
     public string ClassesTaught { get; set; } = string.Empty;
     public string BoardsTaught { get; set; } = string.Empty;

@@ -56,11 +56,12 @@ You are an expert resume parser for the education sector. Extract the following 
 1. Skills: A comma-separated list of technical and soft skills.
 2. PhoneNumber: The candidate's phone number.
 3. TotalExperienceYears: An integer representing the total years of professional experience.
-4. CurrentLocation: The candidate's current city/location.
-5. ClassesTaught: A comma-separated list of school classes or grades taught (e.g. 10th, 12th, Primary).
-6. BoardsTaught: A comma-separated list of education boards taught (e.g. CBSE, ICSE, State Board).
-7. Education: The candidate's highest educational degree (e.g. B.Ed, M.Sc).
-8. Certifications: A comma-separated list of professional certifications.
+4. CurrentLocation: The candidate's current city and state (e.g. New Delhi, Bengaluru).
+5. Address: The candidate's complete street-level address or residential locality/sector from the resume (e.g. Flat 102, Pocket 1, Sector 11, Dwarka, New Delhi; Sector 8, Rohini, Delhi; Indirapuram, Ghaziabad).
+6. ClassesTaught: A comma-separated list of school classes or grades taught (e.g. 10th, 12th, Primary).
+7. BoardsTaught: A comma-separated list of education boards taught (e.g. CBSE, ICSE, State Board).
+8. Education: The candidate's highest educational degree (e.g. B.Ed, M.Sc).
+9. Certifications: A comma-separated list of professional certifications.
 
 Respond ONLY with a valid JSON object matching this schema exactly, and nothing else (leave fields empty if not found):
 {{
@@ -68,6 +69,7 @@ Respond ONLY with a valid JSON object matching this schema exactly, and nothing 
   ""phoneNumber"": ""string"",
   ""totalExperienceYears"": 0,
   ""currentLocation"": ""string"",
+  ""address"": ""string"",
   ""classesTaught"": ""string"",
   ""boardsTaught"": ""string"",
   ""education"": ""string"",
@@ -712,10 +714,10 @@ Generate tailored resume assets. Respond ONLY with a valid JSON object matching 
 
         var isExpMatch = candidate.TotalExperienceYears >= 1;
         var isEduMatch = !string.IsNullOrWhiteSpace(candidate.Education);
+        var candAddressFull = $"{candidate.Address} {candidate.CurrentLocation} {candidate.PreferredLocations}".Trim();
         var isLocMatch = string.IsNullOrWhiteSpace(job.Location) || 
-                         string.IsNullOrWhiteSpace(candidate.CurrentLocation) || 
-                         job.Location.Contains(candidate.CurrentLocation, StringComparison.OrdinalIgnoreCase) || 
-                         candidate.CurrentLocation.Contains(job.Location, StringComparison.OrdinalIgnoreCase);
+                         string.IsNullOrWhiteSpace(candAddressFull) || 
+                         IsLocationMatch(job.Location, candAddressFull);
 
         return new JobResumeComparisonDto
         {
@@ -744,7 +746,9 @@ Generate tailored resume assets. Respond ONLY with a valid JSON object matching 
             LocationMatch = new LocationMatchDto
             {
                 JobLocation = job.Location,
-                CandidateLocation = string.IsNullOrWhiteSpace(candidate.CurrentLocation) ? "Flexible" : candidate.CurrentLocation,
+                CandidateLocation = !string.IsNullOrWhiteSpace(candidate.Address) 
+                    ? $"{candidate.Address} ({candidate.CurrentLocation})" 
+                    : (string.IsNullOrWhiteSpace(candidate.CurrentLocation) ? "Flexible" : candidate.CurrentLocation),
                 IsMatch = isLocMatch,
                 Notes = isLocMatch ? "Candidate is located within commutable range." : "Candidate may need to relocate or confirm remote/hybrid terms."
             },
@@ -760,6 +764,36 @@ Generate tailored resume assets. Respond ONLY with a valid JSON object matching 
                 "Quantify student pass percentages, Olympiad ranks, or grade improvements in work experience bullet points."
             }
         };
+    }
+
+    public static bool IsLocationMatch(string targetLocation, string candidateLocationText)
+    {
+        if (string.IsNullOrWhiteSpace(targetLocation) || string.IsNullOrWhiteSpace(candidateLocationText)) return true;
+
+        var targetClean = targetLocation.ToLowerInvariant();
+        var candClean = candidateLocationText.ToLowerInvariant();
+
+        if (candClean.Contains(targetClean) || targetClean.Contains(candClean)) return true;
+
+        var targetParts = targetClean.Split(new[] { ',', ';', '/', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var part in targetParts)
+        {
+            if (part.Length > 2 && (candClean.Contains(part) || part.Contains(candClean)))
+            {
+                return true;
+            }
+        }
+
+        var targetWords = targetClean.Split(new[] { ' ', ',', '-', '/', '.' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(w => w.Length > 2 && w != "near" && w != "opp" && w != "road" && w != "street")
+            .ToList();
+
+        if (targetWords.Count > 0 && targetWords.Any(w => candClean.Contains(w)))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private TailoredResumeDto GenerateFallbackTailoredResume(Candidate candidate, Job job)
