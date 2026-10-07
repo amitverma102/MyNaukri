@@ -643,4 +643,111 @@ public class WhatsAppMessagingAndReminderTests
         mockWhatsApp.Verify(w => w.SendInterview30MinReminderCandidateAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
+
+    [Fact]
+    public async Task SendInterview30MinReminderRecruiter_WithZoomCall_ContainsZoomLinkAndNoDashboardLink()
+    {
+        var httpClient = new HttpClient();
+        var settings = Options.Create(new WhatsAppSettings
+        {
+            AccessToken = "", // Simulated mode
+            PhoneNumberId = "",
+            BaseUrl = "https://edukey360.com"
+        });
+        var config = new ConfigurationBuilder().Build();
+        var logger = NullLogger<WhatsAppNotificationService>.Instance;
+
+        var service = new WhatsAppNotificationService(httpClient, settings, config, logger);
+
+        var zoomUrl = "https://zoom.us/j/9876543210?pwd=testpasscode123";
+        var success = await service.SendInterview30MinReminderRecruiterAsync(
+            recruiterPhone: "9811199001",
+            recruiterName: "Amit Verma",
+            candidateName: "Pooja Sharma",
+            jobTitle: "Senior Physics Faculty",
+            interviewDateUtc: DateTime.UtcNow.AddMinutes(30),
+            mode: "Online",
+            locationOrLink: zoomUrl
+        );
+
+        Assert.True(success);
+        var recent = service.GetRecentMessages();
+        var sentMsg = Assert.Single(recent, m => m.MessageType == "Interview30MinReminderRecruiter" && m.RecipientPhone == "919811199001");
+
+        // Must contain the Zoom link
+        Assert.Contains(zoomUrl, sentMsg.MessageText);
+        Assert.Contains("Join Zoom Meeting", sentMsg.MessageText);
+
+        // Must NOT contain the dashboard link
+        Assert.DoesNotContain("recruiter/dashboard", sentMsg.MessageText);
+    }
+
+    [Fact]
+    public async Task SendInterview30MinReminderRecruiter_InPerson_ContainsDashboardLink()
+    {
+        var httpClient = new HttpClient();
+        var settings = Options.Create(new WhatsAppSettings
+        {
+            AccessToken = "",
+            PhoneNumberId = "",
+            BaseUrl = "https://edukey360.com"
+        });
+        var config = new ConfigurationBuilder().Build();
+        var logger = NullLogger<WhatsAppNotificationService>.Instance;
+
+        var service = new WhatsAppNotificationService(httpClient, settings, config, logger);
+
+        var venue = "Block C, DPS RK Puram, New Delhi";
+        var success = await service.SendInterview30MinReminderRecruiterAsync(
+            recruiterPhone: "9811199002",
+            recruiterName: "Amit Verma",
+            candidateName: "Pooja Sharma",
+            jobTitle: "Senior Physics Faculty",
+            interviewDateUtc: DateTime.UtcNow.AddMinutes(30),
+            mode: "InPerson",
+            locationOrLink: venue
+        );
+
+        Assert.True(success);
+        var recent = service.GetRecentMessages();
+        var sentMsg = Assert.Single(recent, m => m.MessageType == "Interview30MinReminderRecruiter" && m.RecipientPhone == "919811199002");
+
+        Assert.Contains(venue, sentMsg.MessageText);
+        Assert.Contains("recruiter/dashboard", sentMsg.MessageText);
+    }
+
+    [Fact]
+    public async Task SendInterview30MinReminderCandidate_WithZoomCall_ContainsZoomMeetingHeader()
+    {
+        var httpClient = new HttpClient();
+        var settings = Options.Create(new WhatsAppSettings
+        {
+            AccessToken = "",
+            PhoneNumberId = "",
+            BaseUrl = "https://edukey360.com"
+        });
+        var config = new ConfigurationBuilder().Build();
+        var logger = NullLogger<WhatsAppNotificationService>.Instance;
+
+        var service = new WhatsAppNotificationService(httpClient, settings, config, logger);
+
+        var zoomUrl = "https://zoom.us/j/1234567890?pwd=candidatepass";
+        var success = await service.SendInterview30MinReminderCandidateAsync(
+            candidatePhone: "9988779001",
+            candidateName: "Pooja Sharma",
+            jobTitle: "Senior Physics Faculty",
+            institutionName: "DPS RK Puram",
+            interviewDateUtc: DateTime.UtcNow.AddMinutes(30),
+            mode: "Online",
+            locationOrLink: zoomUrl
+        );
+
+        Assert.True(success);
+        var recent = service.GetRecentMessages();
+        var sentMsg = Assert.Single(recent, m => m.MessageType == "Interview30MinReminderCandidate" && m.RecipientPhone == "919988779001");
+
+        Assert.Contains(zoomUrl, sentMsg.MessageText);
+        Assert.Contains("Join Zoom Meeting", sentMsg.MessageText);
+        Assert.DoesNotContain("dashboard", sentMsg.MessageText);
+    }
 }

@@ -614,9 +614,9 @@ public class JobApplicationsController : ControllerBase
         // Generate ICS Calendar Invite
         string locationOrLink = request.InterviewMode switch
         {
-            InterviewMode.Online => !string.IsNullOrWhiteSpace(request.InterviewLink) ? request.InterviewLink : "Online Video Call",
-            InterviewMode.InPerson => !string.IsNullOrWhiteSpace(request.InterviewVenue) ? request.InterviewVenue : (application.Job.Location ?? "On-site Venue"),
-            InterviewMode.Telephonic => !string.IsNullOrWhiteSpace(request.InterviewDetails) ? $"Telephonic: {request.InterviewDetails}" : "Telephonic Interview",
+            InterviewMode.Online => !string.IsNullOrWhiteSpace(request.InterviewLink) ? request.InterviewLink.Trim() : "Online Video Call",
+            InterviewMode.InPerson => !string.IsNullOrWhiteSpace(request.InterviewVenue) ? request.InterviewVenue.Trim() : (application.Job.Location ?? "On-site Venue"),
+            InterviewMode.Telephonic => !string.IsNullOrWhiteSpace(request.InterviewDetails) ? $"Telephonic: {request.InterviewDetails.Trim()}" : "Telephonic Interview",
             _ => "TBD"
         };
 

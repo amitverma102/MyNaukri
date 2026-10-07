@@ -93,9 +93,9 @@ public class InterviewReminderBackgroundService : BackgroundService
 
                 string locationOrLink = application.InterviewMode switch
                 {
-                    InterviewMode.Online => !string.IsNullOrWhiteSpace(application.InterviewLink) ? application.InterviewLink : "Online Video Call",
-                    InterviewMode.InPerson => !string.IsNullOrWhiteSpace(application.InterviewVenue) ? application.InterviewVenue : (application.Job.Location ?? "On-site Venue"),
-                    InterviewMode.Telephonic => !string.IsNullOrWhiteSpace(application.InterviewDetails) ? $"Telephonic: {application.InterviewDetails}" : "Telephonic Interview",
+                    InterviewMode.Online => !string.IsNullOrWhiteSpace(application.InterviewLink) ? application.InterviewLink.Trim() : "Online Video Call",
+                    InterviewMode.InPerson => !string.IsNullOrWhiteSpace(application.InterviewVenue) ? application.InterviewVenue.Trim() : (application.Job.Location ?? "On-site Venue"),
+                    InterviewMode.Telephonic => !string.IsNullOrWhiteSpace(application.InterviewDetails) ? $"Telephonic: {application.InterviewDetails.Trim()}" : "Telephonic Interview",
                     _ => "TBD"
                 };
 

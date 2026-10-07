@@ -209,6 +209,38 @@ public class WhatsAppNotificationService : IWhatsAppNotificationService
         return SendTextMessageAsync(candidatePhone, msg, "ApplicationStatusUpdateCandidate");
     }
 
+    public static bool IsZoomMeeting(string? locationOrLink)
+    {
+        if (string.IsNullOrWhiteSpace(locationOrLink)) return false;
+        var trimmed = locationOrLink.Trim();
+        return trimmed.Contains("zoom.us", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Contains("zoom.com", StringComparison.OrdinalIgnoreCase) ||
+               (trimmed.Contains("zoom", StringComparison.OrdinalIgnoreCase) && trimmed.Contains("/j/", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static bool IsOnlineMeetingUrl(string? locationOrLink)
+    {
+        if (string.IsNullOrWhiteSpace(locationOrLink)) return false;
+        var trimmed = locationOrLink.Trim();
+        return trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+               IsZoomMeeting(trimmed) ||
+               trimmed.StartsWith("meet.google.com", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("teams.microsoft.com", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string NormalizeMeetingUrl(string? locationOrLink)
+    {
+        if (string.IsNullOrWhiteSpace(locationOrLink)) return string.Empty;
+        var trimmed = locationOrLink.Trim();
+        if (!trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            return "https://" + trimmed;
+        }
+        return trimmed;
+    }
+
     public Task<bool> SendInterviewScheduledCandidateAsync(
         string candidatePhone, 
         string candidateName, 
@@ -226,13 +258,23 @@ public class WhatsAppNotificationService : IWhatsAppNotificationService
             ? $"\n📝 *Reason:* {rescheduleReason.Trim()}\n"
             : "\n";
 
+        var isZoom = IsZoomMeeting(locationOrLink);
+        var isOnlineUrl = IsOnlineMeetingUrl(locationOrLink);
+        var normalizedLink = isOnlineUrl ? NormalizeMeetingUrl(locationOrLink) : locationOrLink;
+
+        string meetingOrVenueLine = isZoom
+            ? $"🎥 *Zoom Meeting Link:* {normalizedLink}"
+            : isOnlineUrl
+                ? $"🎥 *Meeting Link:* {normalizedLink}"
+                : $"🔗 *Venue / Meeting Link:* {locationOrLink}";
+
         var msg = $"{headline}\n\n" +
                   $"Dear *{candidateName}*,\n" +
                   $"Your interview with *{institutionName}* has been {(isReschedule ? "rescheduled" : "confirmed")}:\n\n" +
                   $"📋 *Position:* {jobTitle}\n" +
                   $"🕒 *Date & Time:* *{timeIst}*\n" +
                   $"📍 *Mode:* {mode}\n" +
-                  $"🔗 *Venue / Meeting Link:* {locationOrLink}{reasonLine}\n" +
+                  $"{meetingOrVenueLine}{reasonLine}\n" +
                   $"Please be ready 5 minutes before time. All the best! 🎓";
 
         return SendTextMessageAsync(candidatePhone, msg, isReschedule ? "InterviewRescheduledCandidate" : "InterviewScheduledCandidate");
@@ -250,16 +292,35 @@ public class WhatsAppNotificationService : IWhatsAppNotificationService
     {
         var timeIst = FormatIst(interviewDateUtc);
         var headline = isReschedule ? "📅 *Interview Rescheduled Confirmed - EduKey360*" : "📅 *Interview Scheduled Confirmed - EduKey360*";
+        var isZoom = IsZoomMeeting(locationOrLink);
+        var isOnlineUrl = IsOnlineMeetingUrl(locationOrLink);
+        var normalizedLink = isOnlineUrl ? NormalizeMeetingUrl(locationOrLink) : locationOrLink;
+
+        string meetingOrVenueSection;
+        if (isZoom)
+        {
+            meetingOrVenueSection = $"🎥 *Zoom Meeting Link:*\n🔗 {normalizedLink}\n\n" +
+                                    $"Please join at scheduled time. Good luck! 🎓";
+        }
+        else if (isOnlineUrl)
+        {
+            meetingOrVenueSection = $"🎥 *Meeting Link:*\n🔗 {normalizedLink}\n\n" +
+                                    $"Please join at scheduled time. Good luck! 🎓";
+        }
+        else
+        {
+            meetingOrVenueSection = $"🔗 *Venue / Meeting Link:* {locationOrLink}\n\n" +
+                                    $"Manage responses on EduKey360:\n" +
+                                    $"🔗 {_settings.BaseUrl}/recruiter/dashboard";
+        }
 
         var msg = $"{headline}\n\n" +
                   $"Hello *{recruiterName}*,\n" +
                   $"Interview {(isReschedule ? "rescheduled" : "scheduled")} with candidate *{candidateName}*:\n\n" +
                   $"📋 *Position:* {jobTitle}\n" +
                   $"🕒 *Date & Time:* *{timeIst}*\n" +
-                  $"📍 *Mode:* {mode}\n" +
-                  $"🔗 *Venue / Meeting Link:* {locationOrLink}\n\n" +
-                  $"Manage responses on EduKey360:\n" +
-                  $"🔗 {_settings.BaseUrl}/recruiter/dashboard";
+                  $"📍 *Mode:* {mode}\n\n" +
+                  $"{meetingOrVenueSection}";
 
         return SendTextMessageAsync(recruiterPhone, msg, isReschedule ? "InterviewRescheduledRecruiter" : "InterviewScheduledRecruiter");
     }
@@ -274,14 +335,24 @@ public class WhatsAppNotificationService : IWhatsAppNotificationService
         string locationOrLink)
     {
         var timeIst = FormatIst(interviewDateUtc);
+        var isZoom = IsZoomMeeting(locationOrLink);
+        var isOnlineUrl = IsOnlineMeetingUrl(locationOrLink);
+        var normalizedLink = isOnlineUrl ? NormalizeMeetingUrl(locationOrLink) : locationOrLink;
+
+        string linkLine = isZoom
+            ? $"🎥 *Join Zoom Meeting:*\n🔗 {normalizedLink}"
+            : isOnlineUrl
+                ? $"🎥 *Join Meeting:*\n🔗 {normalizedLink}"
+                : $"🔗 *Link / Venue:* {locationOrLink}";
+
         var msg = $"⏰ *Interview Starting in 30 Minutes! - EduKey360*\n\n" +
                   $"Dear *{candidateName}*,\n" +
                   $"This is a reminder that your interview begins in approximately *30 minutes*:\n\n" +
                   $"📋 *Position:* {jobTitle}\n" +
                   $"🏫 *Institution:* {institutionName}\n" +
                   $"🕒 *Scheduled Time:* *{timeIst}*\n" +
-                  $"📍 *Mode:* {mode}\n" +
-                  $"🔗 *Link / Venue:* {locationOrLink}\n\n" +
+                  $"📍 *Mode:* {mode}\n\n" +
+                  $"{linkLine}\n\n" +
                   $"Please join 5 minutes early to test your audio/video setup. Good luck! 🌟";
 
         return SendTextMessageAsync(candidatePhone, msg, "Interview30MinReminderCandidate");
@@ -297,15 +368,37 @@ public class WhatsAppNotificationService : IWhatsAppNotificationService
         string locationOrLink)
     {
         var timeIst = FormatIst(interviewDateUtc);
+        var isZoom = IsZoomMeeting(locationOrLink);
+        var isOnlineUrl = IsOnlineMeetingUrl(locationOrLink);
+        var normalizedLink = isOnlineUrl ? NormalizeMeetingUrl(locationOrLink) : locationOrLink;
+
+        string meetingOrVenueSection;
+        if (isZoom)
+        {
+            meetingOrVenueSection = $"🎥 *Join Zoom Meeting:*\n" +
+                                    $"🔗 {normalizedLink}\n\n" +
+                                    $"Please start the meeting 5 minutes early to test your audio/video setup. Good luck! 🌟";
+        }
+        else if (isOnlineUrl)
+        {
+            meetingOrVenueSection = $"🎥 *Join Meeting Link:*\n" +
+                                    $"🔗 {normalizedLink}\n\n" +
+                                    $"Please start the meeting 5 minutes early to test your audio/video setup. Good luck! 🌟";
+        }
+        else
+        {
+            meetingOrVenueSection = $"🔗 *Link / Venue:* {locationOrLink}\n\n" +
+                                    $"Candidate details & evaluation sheet are ready in your dashboard:\n" +
+                                    $"🔗 {_settings.BaseUrl}/recruiter/dashboard";
+        }
+
         var msg = $"⏰ *Upcoming Interview in 30 Minutes - EduKey360*\n\n" +
                   $"Hello *{recruiterName}*,\n" +
                   $"Your interview with *{candidateName}* starts in approximately *30 minutes*:\n\n" +
                   $"📋 *Position:* {jobTitle}\n" +
                   $"🕒 *Scheduled Time:* *{timeIst}*\n" +
-                  $"📍 *Mode:* {mode}\n" +
-                  $"🔗 *Link / Venue:* {locationOrLink}\n\n" +
-                  $"Candidate details & evaluation sheet are ready in your dashboard:\n" +
-                  $"🔗 {_settings.BaseUrl}/recruiter/dashboard";
+                  $"📍 *Mode:* {mode}\n\n" +
+                  $"{meetingOrVenueSection}";
 
         return SendTextMessageAsync(recruiterPhone, msg, "Interview30MinReminderRecruiter");
     }
