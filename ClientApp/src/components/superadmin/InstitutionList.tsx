@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Box, Container, Typography, Paper, Table, TableBody, TableCell, 
-  TableContainer, TableHead, TableRow, TablePagination, Button, Avatar 
+  TableContainer, TableHead, TableRow, TablePagination, Button, Avatar,
+  Dialog, DialogTitle, DialogContent, DialogActions, TextField, Alert
 } from '@mui/material';
 import api, { getMediaUrl } from '../../api/axios';
 import CreateInstitutionDialog from './CreateInstitutionDialog';
@@ -20,6 +21,8 @@ interface Institution {
   maxRecruiters: number;
   logoUrl?: string;
   createdDate: string;
+  instituteAdminName?: string | null;
+  instituteAdminEmail?: string | null;
 }
 
 const InstitutionList: React.FC = () => {
@@ -33,6 +36,11 @@ const InstitutionList: React.FC = () => {
   
   const [limitDialogInstId, setLimitDialogInstId] = useState<string | null>(null);
   const [limitDialogCurrentMax, setLimitDialogCurrentMax] = useState<number>(0);
+  const [resetPasswordInst, setResetPasswordInst] = useState<Institution | null>(null);
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
+  const [resetPasswordError, setResetPasswordError] = useState('');
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
 
   const fetchInstitutions = async () => {
     try {
@@ -68,6 +76,34 @@ const InstitutionList: React.FC = () => {
     }
   };
 
+  const handleResetAdminPassword = async () => {
+    if (!resetPasswordInst) return;
+    if (newAdminPassword.length < 6) {
+      setResetPasswordError('Password must be at least 6 characters long.');
+      return;
+    }
+    if (newAdminPassword !== confirmAdminPassword) {
+      setResetPasswordError('Passwords do not match.');
+      return;
+    }
+
+    setResetPasswordLoading(true);
+    setResetPasswordError('');
+    try {
+      await api.post(`/superadmin/institutions/${resetPasswordInst.id}/admin/reset-password`, {
+        newPassword: newAdminPassword
+      });
+      alert('Institute Admin password reset successfully.');
+      setResetPasswordInst(null);
+      setNewAdminPassword('');
+      setConfirmAdminPassword('');
+    } catch (err: any) {
+      setResetPasswordError(err.response?.data?.message || err.response?.data || 'Failed to reset Institute Admin password.');
+    } finally {
+      setResetPasswordLoading(false);
+    }
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -83,6 +119,7 @@ const InstitutionList: React.FC = () => {
             <TableRow>
               <TableCell sx={{ width: 60 }}>Logo</TableCell>
               <TableCell>Name</TableCell>
+              <TableCell>Institute Admin</TableCell>
               <TableCell>Code</TableCell>
               <TableCell>City</TableCell>
               <TableCell>Status</TableCell>
@@ -113,6 +150,14 @@ const InstitutionList: React.FC = () => {
                   </Avatar>
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>{inst.name}</TableCell>
+                <TableCell>
+                  {inst.instituteAdminName ? (
+                    <>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{inst.instituteAdminName}</Typography>
+                      <Typography variant="caption" color="text.secondary">{inst.instituteAdminEmail}</Typography>
+                    </>
+                  ) : <Typography variant="body2" color="text.secondary">No admin assigned</Typography>}
+                </TableCell>
                 <TableCell>{inst.code}</TableCell>
                 <TableCell>{inst.city || '-'}</TableCell>
                 <TableCell>{inst.status === 0 ? 'Active' : 'Inactive'}</TableCell>
@@ -138,6 +183,20 @@ const InstitutionList: React.FC = () => {
                   </Button>
                   <Button size="small" variant="outlined" onClick={() => { setLimitDialogInstId(inst.id); setLimitDialogCurrentMax(inst.maxRecruiters); }} sx={{ textTransform: 'none' }}>
                     Set Limit
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={!inst.instituteAdminEmail}
+                    onClick={() => {
+                      setResetPasswordInst(inst);
+                      setNewAdminPassword('');
+                      setConfirmAdminPassword('');
+                      setResetPasswordError('');
+                    }}
+                    sx={{ mt: 1, textTransform: 'none' }}
+                  >
+                    Reset Admin Password
                   </Button>
                 </TableCell>
               </TableRow>
@@ -183,6 +242,46 @@ const InstitutionList: React.FC = () => {
           fetchInstitutions();
         }}
       />
+
+      <Dialog
+        open={!!resetPasswordInst}
+        onClose={() => !resetPasswordLoading && setResetPasswordInst(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Reset Institute Admin Password</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Set a new password for {resetPasswordInst?.instituteAdminName} ({resetPasswordInst?.instituteAdminEmail}).
+          </Typography>
+          {resetPasswordError && <Alert severity="error" sx={{ mb: 2 }}>{resetPasswordError}</Alert>}
+          <TextField
+            autoFocus
+            margin="dense"
+            fullWidth
+            label="New password"
+            type="password"
+            value={newAdminPassword}
+            onChange={(event) => setNewAdminPassword(event.target.value)}
+            slotProps={{ htmlInput: { minLength: 6 } }}
+          />
+          <TextField
+            margin="dense"
+            fullWidth
+            label="Confirm new password"
+            type="password"
+            value={confirmAdminPassword}
+            onChange={(event) => setConfirmAdminPassword(event.target.value)}
+            slotProps={{ htmlInput: { minLength: 6 } }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setResetPasswordInst(null)} disabled={resetPasswordLoading}>Cancel</Button>
+          <Button onClick={handleResetAdminPassword} variant="contained" disabled={resetPasswordLoading}>
+            {resetPasswordLoading ? 'Resetting…' : 'Reset Password'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

@@ -115,6 +115,15 @@ public class InstitutionListDto
     public int CreditBalance { get; set; }
     public DateTime CreatedDate { get; set; }
     public int MaxRecruiters { get; set; }
+    public string? InstituteAdminName { get; set; }
+    public string? InstituteAdminEmail { get; set; }
+}
+
+public class ResetInstituteAdminPasswordDto
+{
+    [Required]
+    [MinLength(6, ErrorMessage = "New password must be at least 6 characters long.")]
+    public string NewPassword { get; set; } = string.Empty;
 }
 
 public class UpdateMaxRecruitersDto

@@ -311,7 +311,15 @@ public class SuperAdminController : ControllerBase
                 LogoUrl = i.LogoUrl,
                 MaxRecruiters = i.MaxRecruiters,
                 CreditBalance = (i.CreditWallet != null ? i.CreditWallet.AvailableCredits : 0) + i.Recruiters.Sum(r => r.Credits),
-                CreatedDate = i.CreatedAt
+                CreatedDate = i.CreatedAt,
+                InstituteAdminName = i.InstituteAdmins
+                    .Where(p => p.User.Role == Role.InstituteAdministrator)
+                    .Select(p => p.User.FirstName + " " + p.User.LastName)
+                    .FirstOrDefault(),
+                InstituteAdminEmail = i.InstituteAdmins
+                    .Where(p => p.User.Role == Role.InstituteAdministrator)
+                    .Select(p => p.User.Email)
+                    .FirstOrDefault()
             })
             .ToListAsync();
 
@@ -322,6 +330,39 @@ public class SuperAdminController : ControllerBase
             PageSize = pageSize,
             TotalRecords = totalRecords
         });
+    }
+
+    [HttpPost("institutions/{id}/admin/reset-password")]
+    public async Task<IActionResult> ResetInstituteAdminPassword(Guid id, [FromBody] ResetInstituteAdminPasswordDto request)
+    {
+        var currentUserId = GetUserId();
+        if (currentUserId == Guid.Empty) return Unauthorized("Your session is invalid. Please log in again.");
+
+        var admin = await _context.InstituteAdminProfiles
+            .Where(p => p.InstitutionId == id && p.User.Role == Role.InstituteAdministrator)
+            .Select(p => p.User)
+            .FirstOrDefaultAsync();
+
+        if (admin == null) return NotFound("Institute Admin not found for this institution.");
+        if (string.IsNullOrWhiteSpace(request.NewPassword)) return BadRequest("New password is required.");
+
+        admin.PasswordHash = _passwordHasher.Hash(request.NewPassword);
+        admin.UpdatedAt = DateTime.UtcNow;
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            Action = "RESET_INSTITUTE_ADMIN_PASSWORD",
+            PerformedByUserId = currentUserId,
+            Role = Role.SuperAdministrator,
+            Details = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                InstitutionId = id,
+                InstituteAdminUserId = admin.Id
+            })
+        });
+
+        await _context.SaveChangesAsync();
+        return Ok(new { message = "Institute Admin password reset successfully." });
     }
 
     [HttpPut("institutions/{id}/max-recruiters")]
